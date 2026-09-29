@@ -1,6 +1,6 @@
 # Tracking Tiger
 
-Software antifraude. Proyecto de Programación III (TDS-007), ITLA, 2026-C-3.
+Software antifraude. Sistema antifraude para tarjetas de debito y credito — version 0.1
 
 ## Requisitos
 
