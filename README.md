@@ -1,6 +1,6 @@
 # Tracking Tiger
 
-Software antifraude. Sistema antifraude para tarjetas de debito y credito — version 0.1
+Sistema antifraude para tarjetas de debito y credito.
 
 ## Requisitos
 
