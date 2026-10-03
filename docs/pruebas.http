@@ -33,3 +33,26 @@
 #             SMTP_CLAVE para enviar correos." — nombra las variables, nunca sus valores.
 #   SMTP_PORT vacío → 587. SMTP_PORT no numérico o fuera de 1–65535 → mensaje que nombra SMTP_PORT.
 #   SMTP_REMITENTE vacío → se usa SMTP_USUARIO.
+
+### ------------------------------------------------------------
+### RF-NOT-09 — Proceso independiente de envío (comando, no HTTP)
+### ------------------------------------------------------------
+# En CMD, desde la raíz del proyecto:
+#
+#   Sin variables SMTP (terminal nueva, sin "call .env.cmd"):
+#   dotnet run -- enviar-correos
+#   Esperado: "Faltan por configurar las variables de entorno SMTP_HOST, SMTP_USUARIO,
+#             SMTP_CLAVE para enviar correos." Código de salida 1. No inicia el servidor web
+#             y los correos siguen en Pendiente.
+#
+#   Camino feliz:
+#   call .env.cmd
+#   dotnet run -- encolar-prueba <tu-correo>
+#   dotnet run -- enviar-correos
+#   Esperado: "Correos enviados: N" (N = pendientes que había). No inicia el servidor web.
+#             El correo llega a la bandeja. En CorreosEnCola esas filas quedan con
+#             Estado = Enviado y FechaEnvio en UTC.
+#
+#   Ejecutarlo otra vez enseguida:
+#   dotnet run -- enviar-correos
+#   Esperado: "Correos enviados: 0" (los enviados no se vuelven a enviar).

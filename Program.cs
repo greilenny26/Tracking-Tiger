@@ -10,9 +10,11 @@ builder.Services.AddControllers();
 builder.Services.AddSingleton<IReloj, RelojSistema>();
 
 builder.Services.AddDbContext<ContextoDatos>(opciones =>
-    opciones.UseSqlite("Data Source=trackingtiger.db"));
+opciones.UseSqlite("Data Source=trackingtiger.db"));
 
 builder.Services.AddScoped<IColaCorreo, ColaCorreo>();
+builder.Services.AddSingleton<IEnviadorCorreo, EnviadorSmtp>();
+builder.Services.AddScoped<ProcesadorColaCorreo>();
 
 var app = builder.Build();
 
@@ -48,6 +50,32 @@ if (args.Length > 0 && args[0] == "encolar-prueba")
     {
         // RD-08: no se muestran trazas ni consultas.
         Console.WriteLine("No se pudo encolar el correo. Verifica que la base de datos esté creada y migrada.");
+        Environment.ExitCode = 1;
+    }
+
+    return;
+}
+
+// Proceso independiente de envío (RF-NOT-09): dotnet run -- enviar-correos
+// Envía los correos pendientes y termina sin levantar el servidor web. La lógica vive en ProcesadorColaCorreo.
+if (args.Length > 0 && args[0] == "enviar-correos")
+{
+    using var alcance = app.Services.CreateScope();
+    var procesador = alcance.ServiceProvider.GetRequiredService<ProcesadorColaCorreo>();
+
+    try
+    {
+        var resultado = await procesador.ProcesarPendientesAsync();
+
+        Console.WriteLine(resultado.Exito
+            ? $"Correos enviados: {resultado.Enviados}"
+            : resultado.Mensaje);
+        Environment.ExitCode = resultado.Exito ? 0 : 1;
+    }
+    catch (Exception)
+    {
+        // RD-08: no se muestran trazas, consultas ni datos del servidor.
+        Console.WriteLine("No se pudo completar el envío de correos. Revisa la configuración SMTP y la conexión.");
         Environment.ExitCode = 1;
     }
 
