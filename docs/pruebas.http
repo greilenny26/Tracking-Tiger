@@ -53,6 +53,16 @@
 #             El correo llega a la bandeja. En CorreosEnCola esas filas quedan con
 #             Estado = Enviado y FechaEnvio en UTC.
 #
-#   Ejecutarlo otra vez enseguida:
+### ------------------------------------------------------------
+### RF-NOT-12 — Ejecutar el envío dos veces no duplica correos
+### ------------------------------------------------------------
+#   Justo después del camino feliz anterior:
 #   dotnet run -- enviar-correos
-#   Esperado: "Correos enviados: 0" (los enviados no se vuelven a enviar).
+#   Esperado: "No hay correos pendientes." No llega ningún correo nuevo a la bandeja
+#             y FechaEnvio de las filas Enviado no cambia.
+#
+#   Con la base sin filas Pendiente desde el inicio:
+#   Esperado: "No hay correos pendientes." y no se conecta al servidor SMTP.
+#
+#   Cada fila se guarda como Enviado apenas sale su correo: si el envío se corta a mitad
+#   del lote, las ya enviadas quedan en Enviado y la siguiente ejecución solo envía las restantes.

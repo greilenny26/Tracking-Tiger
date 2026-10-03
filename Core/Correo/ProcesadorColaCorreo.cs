@@ -5,7 +5,9 @@ using Tracking_Tiger.Core.Persistencia;
 namespace Tracking_Tiger.Core.Correo;
 
 // Proceso independiente que envía los correos pendientes (RF-NOT-09).
-// Corre fuera del flujo que creó cada correo. Solo camino feliz: sin reintentos ni estado Fallido.
+// Corre fuera del flujo que creó cada correo. Ejecutarlo dos veces no duplica envíos (RF-NOT-12):
+// cada fila se vuelve a consultar justo antes de enviarla y se guarda como Enviado apenas sale.
+// Sin reintentos ni estado Fallido todavía.
 public sealed class ProcesadorColaCorreo
 {
     private readonly ContextoDatos _contexto;
@@ -34,19 +36,27 @@ public sealed class ProcesadorColaCorreo
         if (!configuracion.Exito)
             return ResultadoProcesarCola.Error(configuracion.Mensaje!);
 
+        var enviados = 0;
         await using (var sesion = await _enviador.AbrirSesionAsync(configuracion.Configuracion!))
         {
             foreach (var correo in pendientes)
             {
+                // Otra ejecución pudo haberlo enviado desde que se cargó la lista.
+                // Si la fila ya no existe, ReloadAsync la desvincula y conserva el estado viejo en memoria.
+                var entrada = _contexto.Entry(correo);
+                await entrada.ReloadAsync();
+                if (entrada.State == EntityState.Detached || correo.Estado != EstadoCorreo.Pendiente)
+                    continue;
+
                 await sesion.EnviarAsync(correo);
+
                 correo.Estado = EstadoCorreo.Enviado;
                 correo.FechaEnvio = _reloj.AhoraUtc;
+                await _contexto.SaveChangesAsync();
+                enviados++;
             }
         }
 
-        // El lote se guarda al final, en una sola operación.
-        await _contexto.SaveChangesAsync();
-
-        return ResultadoProcesarCola.Correcto(pendientes.Count);
+        return ResultadoProcesarCola.Correcto(enviados);
     }
 }
