@@ -16,3 +16,23 @@
 - Credenciales SMTP solo por variables de entorno. Nada de secretos en el repo.
 - Antes de dar algo por terminado: compila (`dotnet build`) y explica cómo probarlo.
 - No avances a otra funcionalidad sin que yo lo pida.
+
+## Reglas de commits (el profesor las califica)
+- NO ejecutes `git commit` ni `git push`: los hago yo. Tú dejas los cambios listos.
+- Un commit = un caso = un solo ID de requisito en el asunto.
+- Asunto en español, imperativo, sin " y ", " e ", " o " ni "/". Formato: `Verbo + qué (RF-XX-NN)`.
+- No mezcles cambios sin relación en una misma tarea.
+
+## Código
+- Clases, métodos, propiedades, mensajes al usuario y comentarios en español.
+- Estructura: carpeta Core/ y carpeta Negocio/. Core NUNCA referencia a Negocio (RD-03).
+- La lógica de negocio no va en los controladores/endpoints (RD-02).
+- Toda fecha se toma de un reloj único en UTC (RD-11).
+- No leas ni imprimas `.env.cmd`. Nunca escribas credenciales en el código ni en documentos.
+- No agregues paquetes NuGet sin preguntarme. Permitidos de inicio: EF Core Sqlite/Design, MailKit.
+- Cada vez que agregues una variable de entorno, actualiza `.env.example` (solo nombre y descripción).
+
+## Pruebas manuales y documentación
+- Cada tarea agrega su caso a `docs/pruebas.http` (petición + resultado esperado como comentario).
+- Al terminar cada tarea: ejecuta `skills.cmd build`, lista los archivos que tocaste y dime cómo probarla.
+- Los requisitos exactos están en `docs/requisitos/`. Léelos antes de implementar.
