@@ -17,3 +17,19 @@
 #
 #   dotnet run -- encolar-prueba
 #   Esperado: "Uso: dotnet run -- encolar-prueba <destinatario>"
+
+### ------------------------------------------------------------
+### RF-NOT-13 — Configuración SMTP por variables de entorno
+### ------------------------------------------------------------
+# La configuración solo se lee cuando el enviador la pide, no al iniciar la API.
+#
+#   En una terminal SIN haber ejecutado "call .env.cmd":
+#   dotnet run
+#   Esperado: la API inicia normalmente ("Now listening on: http://localhost:5000"),
+#             sin errores por falta de SMTP_HOST, SMTP_USUARIO ni SMTP_CLAVE.
+#
+#   Cuando exista el enviador, ejecutarlo sin las variables:
+#   Esperado: "Faltan por configurar las variables de entorno SMTP_HOST, SMTP_USUARIO,
+#             SMTP_CLAVE para enviar correos." — nombra las variables, nunca sus valores.
+#   SMTP_PORT vacío → 587. SMTP_PORT no numérico o fuera de 1–65535 → mensaje que nombra SMTP_PORT.
+#   SMTP_REMITENTE vacío → se usa SMTP_USUARIO.
