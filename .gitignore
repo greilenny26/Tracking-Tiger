@@ -124,6 +124,10 @@ ipch/
 *.VC.db
 *.VC.VC.opendb
 
+# Local package caches and tool repositories
+.m2/
+.nuget/
+
 # Visual Studio profiler
 *.psess
 *.vsp
