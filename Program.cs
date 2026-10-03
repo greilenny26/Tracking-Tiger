@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.Comun;
+using Tracking_Tiger.Core.Correo;
 using Tracking_Tiger.Core.Persistencia;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,7 +12,47 @@ builder.Services.AddSingleton<IReloj, RelojSistema>();
 builder.Services.AddDbContext<ContextoDatos>(opciones =>
     opciones.UseSqlite("Data Source=trackingtiger.db"));
 
+builder.Services.AddScoped<IColaCorreo, ColaCorreo>();
+
 var app = builder.Build();
+
+// Comando de desarrollo: dotnet run -- encolar-prueba <destinatario>
+// Encola un correo de prueba y termina sin levantar el servidor web.
+// Solo sirve para probar la cola y el enviador; la lógica vive en ColaCorreo.
+if (args.Length > 0 && args[0] == "encolar-prueba")
+{
+    if (args.Length < 2)
+    {
+        Console.WriteLine("Uso: dotnet run -- encolar-prueba <destinatario>");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    using var alcance = app.Services.CreateScope();
+    var cola = alcance.ServiceProvider.GetRequiredService<IColaCorreo>();
+    var reloj = alcance.ServiceProvider.GetRequiredService<IReloj>();
+
+    try
+    {
+        var resultado = await cola.EncolarAsync(
+            args[1],
+            "Correo de prueba de Tracking Tiger",
+            $"Este es un correo de prueba de la cola. Encolado el {reloj.AhoraUtc:yyyy-MM-dd HH:mm:ss} UTC.");
+
+        Console.WriteLine(resultado.Exito
+            ? $"{resultado.Mensaje} Id: {resultado.CorreoId}"
+            : $"Rechazado: {resultado.Mensaje}");
+        Environment.ExitCode = resultado.Exito ? 0 : 1;
+    }
+    catch (Exception)
+    {
+        // RD-08: no se muestran trazas ni consultas.
+        Console.WriteLine("No se pudo encolar el correo. Verifica que la base de datos esté creada y migrada.");
+        Environment.ExitCode = 1;
+    }
+
+    return;
+}
 
 app.MapControllers();
 

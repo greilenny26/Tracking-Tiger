@@ -1,0 +1,19 @@
+### Pruebas manuales — Tracking Tiger (Práctica 1)
+### Cada caso: petición o comando + resultado esperado como comentario.
+
+### ------------------------------------------------------------
+### RF-NOT-08 — Encolar un correo de prueba (comando de desarrollo, no HTTP)
+### ------------------------------------------------------------
+# Ejecutar en la terminal, desde la raíz del proyecto:
+#
+#   dotnet run -- encolar-prueba prueba@example.com
+#   Esperado: "El correo quedó en la cola en estado pendiente. Id: <n>"
+#             El servidor web NO se inicia y no se contacta ningún servidor SMTP.
+#             En la tabla CorreosEnCola aparece la fila con Estado = Pendiente,
+#             Intentos = 0 y FechaCreacion en UTC.
+#
+#   dotnet run -- encolar-prueba "   "
+#   Esperado: "Rechazado: El destinatario es obligatorio." (sin excepción ni traza)
+#
+#   dotnet run -- encolar-prueba
+#   Esperado: "Uso: dotnet run -- encolar-prueba <destinatario>"
