@@ -16,3 +16,11 @@
 - Credenciales SMTP solo por variables de entorno. Nada de secretos en el repo.
 - Antes de dar algo por terminado: compila (`dotnet build`) y explica cómo probarlo.
 - No avances a otra funcionalidad sin que yo lo pida.
+
+## Habilidades Disponibles (Skills)
+- `skills.cmd build`: Verifica compilación con `dotnet build`.
+- `skills.cmd check-secrets`: Escanea credenciales expuestas en archivos de configuración.
+- `skills.cmd clean`: Limpia los ejecutables y archivos temporales.
+- `skills.cmd db-migrate <nombre>`: Aplica cambios en la base de datos SQLite con EF Core.
+- `skills.cmd test`: Ejecuta las pruebas automatizadas del proyecto.
+- `skills.cmd git-feature <nombre>`: Crea una nueva rama `feat/<nombre>` para la funcionalidad.
