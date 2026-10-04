@@ -58,6 +58,19 @@ public class Usuario
             FechaCreacion = fechaCreacionUtc
         };
 
+    // Administrador inicial (RF-CA-04): solo lo usa el comando crear-admin. Nace ACTIVO y con rol
+    // Administrador; es la única forma de crear un usuario con ese rol sin que otro Administrador lo promueva.
+    public static Usuario CrearAdministradorInicial(string nombre, string correo, string hashContrasena, DateTime fechaCreacionUtc) =>
+        new()
+        {
+            Nombre = nombre,
+            Correo = correo,
+            HashContrasena = hashContrasena,
+            Rol = Rol.Administrador,
+            Activo = true,
+            FechaCreacion = fechaCreacionUtc
+        };
+
     // Única regla de normalización del correo; también se usa para buscar usuarios por correo.
     public static string NormalizarCorreo(string correo) =>
         (correo ?? string.Empty).Trim().ToLowerInvariant();

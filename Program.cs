@@ -29,6 +29,7 @@ builder.Services.AddScoped<ServicioRegistro>();
 builder.Services.AddScoped<ServicioActivacion>();
 builder.Services.AddScoped<ServicioReenvioActivacion>();
 builder.Services.AddScoped<ServicioSesion>();
+builder.Services.AddScoped<ServicioAdministradorInicial>();
 
 // Esquema de autenticación por defecto (RF-CA-07): todo [Authorize] usa la credencial de sesión.
 builder.Services.AddAuthentication(ManejadorAutenticacionSesion.Esquema)
@@ -115,6 +116,30 @@ if (args.Length > 0 && args[0] == "enviar-correos")
     {
         // RD-08: no se muestran trazas, consultas ni datos del servidor.
         Console.WriteLine("No se pudo completar el envío de correos. Revisa la configuración SMTP y la conexión.");
+        Environment.ExitCode = 1;
+    }
+
+    return;
+}
+
+// Comando crear-admin (RF-CA-04): dotnet run -- crear-admin
+// Crea el primer Administrador desde ADMIN_CORREO_INICIAL y ADMIN_CLAVE_INICIAL y termina sin levantar
+// el servidor web. La lógica vive en ServicioAdministradorInicial.
+if (args.Length > 0 && args[0] == "crear-admin")
+{
+    using var alcance = app.Services.CreateScope();
+    var servicio = alcance.ServiceProvider.GetRequiredService<ServicioAdministradorInicial>();
+
+    try
+    {
+        var resultado = await servicio.CrearAsync();
+        Console.WriteLine(resultado.Mensaje);
+        Environment.ExitCode = resultado.Exito ? 0 : 1;
+    }
+    catch (Exception)
+    {
+        // RD-08: no se muestran trazas, consultas ni datos.
+        Console.WriteLine("No se pudo crear el Administrador inicial. Verifica la base de datos e inténtalo de nuevo.");
         Environment.ExitCode = 1;
     }
 

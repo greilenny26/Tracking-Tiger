@@ -709,6 +709,56 @@ Content-Type: application/json
 #   Esperado: HTTP 200 {"id":<n>,"nombre":"...","correo":"...","rol":"Estandar"}
 
 ### ------------------------------------------------------------
+### RF-CA-04 — Comando crear-admin (CLI, no HTTP)
+### ------------------------------------------------------------
+# En CMD, desde la raíz del proyecto. No inicia el servidor web. La contraseña NUNCA debe
+# aparecer en la consola, ni en los mensajes ni en los registros.
+#
+#   1) Sin variables (terminal nueva):
+#      dotnet run -- crear-admin
+#   Esperado: "Faltan por configurar las variables de entorno ADMIN_CORREO_INICIAL, ADMIN_CLAVE_INICIAL."
+#             Código de salida 1. No se crea ninguna fila.
+#
+#   2) Solo una variable:
+#      set ADMIN_CORREO_INICIAL=admin@example.com
+#      dotnet run -- crear-admin
+#   Esperado: "Falta configurar la variable de entorno ADMIN_CLAVE_INICIAL." (código 1).
+#
+#   3) Valores inválidos (nombra la variable y el motivo, nunca el valor):
+#      set ADMIN_CORREO_INICIAL=no-es-correo
+#      set ADMIN_CLAVE_INICIAL=Clave1234
+#   Esperado: "La variable de entorno ADMIN_CORREO_INICIAL no es válida: El correo no tiene un formato válido."
+#      set ADMIN_CORREO_INICIAL=admin@example.com
+#      set ADMIN_CLAVE_INICIAL=abc12
+#   Esperado: "La variable de entorno ADMIN_CLAVE_INICIAL no es válida: La contraseña debe tener al menos 8 caracteres."
+#
+#   4) Primera ejecución válida (o con "call .env.cmd" si las variables están ahí):
+#      set ADMIN_CORREO_INICIAL=admin@example.com
+#      set ADMIN_CLAVE_INICIAL=Clave1234
+#      dotnet run -- crear-admin
+#   Esperado: "Se creó el Administrador inicial, activo y listo para iniciar sesión." (código 0).
+#             En DB Browser: Rol = 'Administrador', Activo = 1, HashContrasena empieza con
+#             "PBKDF2-SHA256$" (no es la contraseña), correo normalizado.
+#
+#   5) Segunda ejecución con las mismas variables:
+#   Esperado: "Ya existe un usuario con ese correo. No se cambió nada (no se promueve a un usuario existente)."
+#             Código 0. La fila no cambia.
+#
+#   6) Correo de un usuario Estándar ya registrado:
+#      set ADMIN_CORREO_INICIAL=<correo-de-un-usuario-estándar>
+#      dotnet run -- crear-admin
+#   Esperado: el mismo mensaje "Ya existe..."; ese usuario SIGUE con Rol = 'Estandar'.
+
+### 7. Iniciar sesión con el Administrador creado y consultar /yo
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "admin@example.com", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 200 con token (la cuenta ya está activa). Luego GET /api/auth/yo con ese token:
+#             {"id":<n>,"nombre":"Administrador","correo":"admin@example.com","rol":"Administrador"}
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
