@@ -34,6 +34,22 @@ builder.Services.AddScoped<ProcesadorColaCorreo>();
 
 var app = builder.Build();
 
+// Paso único de arranque (RD-09): aplica las migraciones pendientes antes de cualquier punto de entrada
+// (servidor web, encolar-prueba, enviar-correos). Con un clon nuevo crea la base de datos desde cero;
+// si ya está al día, no hace nada.
+try
+{
+    using var alcanceMigracion = app.Services.CreateScope();
+    alcanceMigracion.ServiceProvider.GetRequiredService<ContextoDatos>().Database.Migrate();
+}
+catch (Exception)
+{
+    // RD-08: no se muestran trazas ni consultas.
+    Console.WriteLine("No se pudo preparar la base de datos. Verifica que el archivo no esté en uso y que haya permisos de escritura.");
+    Environment.ExitCode = 1;
+    return;
+}
+
 // Comando de desarrollo: dotnet run -- encolar-prueba <destinatario>
 // Encola un correo de prueba y termina sin levantar el servidor web.
 // Solo sirve para probar la cola y el enviador; la lógica vive en ColaCorreo.

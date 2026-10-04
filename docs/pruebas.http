@@ -375,6 +375,29 @@ GET http://localhost:5000/api/auth/activar?token=<token-del-enlace-B>
 #   Los tokens ya usados no se tocan al reenviar (solo se invalidan los que no se usaron).
 
 ### ------------------------------------------------------------
+### RD-09 — Migraciones aplicadas automáticamente al iniciar
+### ------------------------------------------------------------
+# Simula un clon nuevo: cerrar DB Browser y la API, y renombrar (no borrar) trackingtiger.db,
+# por ejemplo a trackingtiger.respaldo.db. Sin ejecutar "dotnet ef database update":
+#
+#   1) dotnet run -- encolar-prueba prueba@example.com
+#   Esperado: "El correo quedó en la cola en estado pendiente. Id: 1". Se crea trackingtiger.db
+#             con todas las tablas (Usuarios, TokensActivacion, CorreosEnCola, __EFMigrationsHistory).
+#
+#   2) Borrar el trackingtiger.db recién creado y ejecutar: dotnet run -- enviar-correos
+#   Esperado: "No hay correos pendientes." Se crea trackingtiger.db migrada, sin error de tabla inexistente.
+#
+#   3) Borrar el trackingtiger.db recién creado y ejecutar: dotnet run
+#   Esperado: la API inicia normalmente y crea trackingtiger.db migrada. Luego:
+GET http://localhost:5000/api/auth/activar?token=tokenQueNoExiste123
+
+#   Esperado: HTTP 400 {"mensaje":"El enlace de activación no es válido."} (las tablas existen).
+#
+#   4) Volver a iniciar con la base ya creada: arranca igual, sin cambios ni errores (no hay pendientes).
+#   En DB Browser, __EFMigrationsHistory lista todas las migraciones de la carpeta Migrations/.
+#   Al terminar, restaurar el respaldo con su nombre original si se quieren conservar los datos.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
