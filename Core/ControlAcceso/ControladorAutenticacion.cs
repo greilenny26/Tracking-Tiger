@@ -15,7 +15,8 @@ public sealed class ControladorAutenticacion : ControllerBase
     }
 
     // RF-CA-01: 201 con los datos públicos del usuario, 400 si los datos no son válidos,
-    // 409 si el correo ya está registrado. La respuesta nunca incluye el hash.
+    // 409 si el correo ya está registrado, 503 si falta configuración del servidor.
+    // La respuesta nunca incluye el hash ni el token de activación.
     [HttpPost("registro")]
     public async Task<IActionResult> Registrar([FromBody] SolicitudRegistro solicitud)
     {
@@ -32,6 +33,7 @@ public sealed class ControladorAutenticacion : ControllerBase
                 activo = resultado.Usuario.Activo
             }),
             EstadoRegistro.CorreoDuplicado => Conflict(new { mensaje = resultado.Mensaje }),
+            EstadoRegistro.NoDisponible => StatusCode(StatusCodes.Status503ServiceUnavailable, new { mensaje = resultado.Mensaje }),
             _ => BadRequest(new { mensaje = resultado.Mensaje })
         };
     }

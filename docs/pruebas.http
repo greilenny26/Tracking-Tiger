@@ -169,11 +169,12 @@
 POST http://localhost:5000/api/auth/registro
 Content-Type: application/json
 
-{"nombre": "Ana Pérez", "correo": "  Ana.Perez@Example.COM ", "contrasena": "Clave1234"}
+{"nombre": "Maria Pérez", "correo": "alexabello383@gmail.com ", "contrasena": "Clave4321"}
 
 #   Esperado: HTTP 201
-#             {"mensaje":"La cuenta se creó, pero todavía no está activa.","id":<n>,
-#              "nombre":"Ana Pérez","correo":"ana.perez@example.com","activo":false}
+#             {"mensaje":"La cuenta se creó, pero todavía no está activa. Te enviaremos un correo
+#              con el enlace para activarla.","id":<n>,"nombre":"Ana Pérez",
+#              "correo":"ana.perez@example.com","activo":false}
 #             La respuesta NO incluye hashContrasena ni la contraseña.
 #   En DB Browser (tabla Usuarios): Correo = "ana.perez@example.com", Activo = 0,
 #             HashContrasena = "PBKDF2-SHA256$600000$...$...", FechaCreacion en UTC.
@@ -241,7 +242,32 @@ Content-Type: application/json
 #   HTTP, ni en la consola del servidor.
 #   Registros rechazados (casos 2 a 6): no se crea ninguna fila en Usuarios ni en TokensActivacion.
 #   Mismo SaveChanges: si falla el guardado, no queda un usuario sin token ni un token sin usuario.
-#   No se encola ningún correo todavía (CorreosEnCola sin filas nuevas).
+
+### ------------------------------------------------------------
+### RF-CA-15 — Correo de activación en la cola, sin contactar SMTP
+### ------------------------------------------------------------
+# Requisito: APP_URL_BASE definida en la terminal donde corre la API (ver .env.example).
+#
+#   1) Con SMTP caído o sin configurar: en una terminal con APP_URL_BASE pero con
+#      "set SMTP_HOST=localhost" y "set SMTP_PORT=2599" (o sin variables SMTP), ejecutar
+#      "dotnet run" y repetir el caso 1 de RF-CA-01 con otro correo.
+#   Esperado: HTTP 201 de inmediato (el registro no intenta conectarse a SMTP).
+#             En CorreosEnCola aparece una fila nueva: Destinatario = correo normalizado,
+#             Asunto = "Activa tu cuenta de Tracking Tiger", Estado = Pendiente, Intentos = 0.
+#             El Cuerpo incluye <APP_URL_BASE>/api/auth/activar?token=<43 caracteres>.
+#             Usuario, token y correo se crearon en la misma transacción (los tres o ninguno).
+#   El token en claro NO aparece en la respuesta HTTP ni en la consola del servidor.
+#   SHA-256 del token del enlace = TokenHash de la fila en TokensActivacion.
+#
+#   2) Sin APP_URL_BASE (terminal nueva sin la variable):
+#   Esperado: HTTP 503 {"mensaje":"El registro no está disponible en este momento. Intenta de nuevo más tarde."}
+#             La consola del servidor registra "Falta configurar la variable de entorno APP_URL_BASE ...".
+#             No se crea ninguna fila en Usuarios, TokensActivacion ni CorreosEnCola.
+#
+#   3) Registros rechazados (casos 2 a 6 de RF-CA-01): no se encola ningún correo.
+#
+#   4) Envío posterior con el proceso aparte (call .env.cmd; dotnet run -- enviar-correos):
+#   Esperado: el correo llega con el enlace y la fila pasa a Enviado.
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
