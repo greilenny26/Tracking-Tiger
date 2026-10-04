@@ -27,6 +27,7 @@ builder.Services.AddScoped<EmisorActivacion>();
 builder.Services.AddScoped<ServicioRegistro>();
 builder.Services.AddScoped<ServicioActivacion>();
 builder.Services.AddScoped<ServicioReenvioActivacion>();
+builder.Services.AddScoped<ServicioSesion>();
 
 builder.Services.AddScoped<IColaCorreo, ColaCorreo>();
 builder.Services.AddSingleton<IEnviadorCorreo, EnviadorSmtp>();

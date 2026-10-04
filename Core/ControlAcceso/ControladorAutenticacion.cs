@@ -10,13 +10,15 @@ public sealed class ControladorAutenticacion : ControllerBase
     private readonly ServicioRegistro _servicioRegistro;
     private readonly ServicioActivacion _servicioActivacion;
     private readonly ServicioReenvioActivacion _servicioReenvio;
+    private readonly ServicioSesion _servicioSesion;
 
     public ControladorAutenticacion(ServicioRegistro servicioRegistro, ServicioActivacion servicioActivacion,
-        ServicioReenvioActivacion servicioReenvio)
+        ServicioReenvioActivacion servicioReenvio, ServicioSesion servicioSesion)
     {
         _servicioRegistro = servicioRegistro;
         _servicioActivacion = servicioActivacion;
         _servicioReenvio = servicioReenvio;
+        _servicioSesion = servicioSesion;
     }
 
     // RF-CA-01: 201 con los datos públicos del usuario, 400 si los datos no son válidos,
@@ -66,6 +68,22 @@ public sealed class ControladorAutenticacion : ControllerBase
             EstadoReenvio.Aceptado => Ok(new { mensaje = resultado.Mensaje }),
             EstadoReenvio.NoDisponible => StatusCode(StatusCodes.Status503ServiceUnavailable, new { mensaje = resultado.Mensaje }),
             _ => BadRequest(new { mensaje = resultado.Mensaje })
+        };
+    }
+
+    // RF-CA-03: 200 con la credencial de sesión y su vencimiento (UTC), 400 si falta el correo
+    // o la contraseña, 401 con el mismo mensaje ante cualquier otra falla.
+    // El token en claro solo aparece en esta respuesta.
+    [HttpPost("login")]
+    public async Task<IActionResult> IniciarSesion([FromBody] SolicitudInicioSesion solicitud)
+    {
+        var resultado = await _servicioSesion.IniciarSesionAsync(solicitud.Correo, solicitud.Contrasena);
+
+        return resultado.Estado switch
+        {
+            EstadoInicioSesion.Iniciada => Ok(new { token = resultado.Token, venceEn = resultado.VenceEn }),
+            EstadoInicioSesion.DatosInvalidos => BadRequest(new { mensaje = resultado.Mensaje }),
+            _ => Unauthorized(new { mensaje = resultado.Mensaje })
         };
     }
 }

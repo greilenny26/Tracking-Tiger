@@ -412,6 +412,54 @@ GET http://localhost:5000/api/auth/activar?token=tokenQueNoExiste123
 #   El inicio de sesión que crea filas aquí llega en el siguiente paso.
 
 ### ------------------------------------------------------------
+### RF-CA-03 — Inicio de sesión: POST /api/auth/login
+### ------------------------------------------------------------
+# Solo el camino feliz. Todavía NO se exige cuenta activa ni se igualan los tiempos de respuesta.
+# Antes: registrar un usuario con el caso 1 de RF-CA-01 (contraseña "Clave1234").
+
+### 1. Credenciales correctas (el correo admite mayúsculas y espacios: se normaliza)
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "  <correo-registrado-en-mayúsculas> ", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 200 {"token":"<43 caracteres Base64Url>","venceEn":"<fecha UTC terminada en Z>"}
+#             venceEn = ahora (UTC) + 8 horas.
+#   En DB Browser (SesionesUsuario): fila nueva con UsuarioId del usuario, TokenHash = SHA-256 del
+#             token en hexadecimal (64 caracteres, distinto del token), FechaEmision en UTC,
+#             FechaVencimiento = FechaEmision + 8 h, Revocada = 0.
+#   El token en claro NO está en la base ni en la consola del servidor.
+#   Repetir el login: devuelve un token distinto y crea otra fila.
+
+### 2. Contraseña incorrecta
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "OtraClave99"}
+
+#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."}. No se crea ninguna sesión.
+
+### 3. Correo inexistente
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "nadie@example.com", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."} — idéntico al caso 2.
+#   No se crea ninguna sesión.
+
+### 4. Campos vacíos o ausentes
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo es obligatorio."}
+#   Con {"correo":"ana@example.com","contrasena":""} o sin "contrasena":
+#             HTTP 400 {"mensaje":"La contraseña es obligatoria."}
+#   No se crea ninguna sesión.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
