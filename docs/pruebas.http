@@ -398,6 +398,20 @@ GET http://localhost:5000/api/auth/activar?token=tokenQueNoExiste123
 #   Al terminar, restaurar el respaldo con su nombre original si se quieren conservar los datos.
 
 ### ------------------------------------------------------------
+### RF-CA-03 — Tabla SesionesUsuario (base de datos, sin endpoint todavía)
+### ------------------------------------------------------------
+# Iniciar la API una vez ("dotnet run"; aplica la migración CrearSesionUsuario si falta)
+# y abrir trackingtiger.db en DB Browser:
+#
+#   Esperado: existe la tabla SesionesUsuario con Id, UsuarioId, TokenHash, FechaEmision,
+#             FechaVencimiento y Revocada (valor por defecto 0).
+#             Índices: IX_SesionesUsuario_TokenHash marcado UNIQUE e IX_SesionesUsuario_UsuarioId.
+#             Clave foránea UsuarioId → Usuarios(Id) con borrado en cascada.
+#             TokenHash tiene largo máximo 64: solo guarda el SHA-256 en hexadecimal, nunca el token.
+#   En __EFMigrationsHistory aparece ...._CrearSesionUsuario.
+#   El inicio de sesión que crea filas aquí llega en el siguiente paso.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
