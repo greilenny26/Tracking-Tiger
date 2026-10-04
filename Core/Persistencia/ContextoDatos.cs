@@ -53,6 +53,7 @@ public class ContextoDatos : DbContext
             token.Property(t => t.FechaEmision).IsRequired();
             token.Property(t => t.FechaVencimiento).IsRequired();
             token.Property(t => t.Usado).IsRequired();
+            token.Property(t => t.Invalidado).IsRequired();
             // La activación busca el token por su hash.
             token.HasIndex(t => t.TokenHash).IsUnique();
             token.HasOne(t => t.Usuario)

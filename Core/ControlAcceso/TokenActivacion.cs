@@ -14,6 +14,9 @@ public class TokenActivacion
     public DateTime FechaVencimiento { get; private set; }
     public bool Usado { get; private set; }
 
+    // Se marca cuando se emite un token nuevo para el mismo usuario (RF-CA-17): el enlace anterior deja de servir.
+    public bool Invalidado { get; private set; }
+
     // Solo para EF Core al leer filas. Todo token nuevo se crea con Emitir.
     private TokenActivacion()
     {
@@ -21,6 +24,9 @@ public class TokenActivacion
 
     // Marca el token como consumido al activar la cuenta (RF-CA-16).
     public void MarcarUsado() => Usado = true;
+
+    // Invalida el token porque se emitió otro más nuevo para el mismo usuario (RF-CA-17).
+    public void Invalidar() => Invalidado = true;
 
     // Se asocia por la navegación para guardarse en el mismo SaveChanges que un usuario nuevo,
     // cuando su Id todavía no existe.

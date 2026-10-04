@@ -9,11 +9,14 @@ public sealed class ControladorAutenticacion : ControllerBase
 {
     private readonly ServicioRegistro _servicioRegistro;
     private readonly ServicioActivacion _servicioActivacion;
+    private readonly ServicioReenvioActivacion _servicioReenvio;
 
-    public ControladorAutenticacion(ServicioRegistro servicioRegistro, ServicioActivacion servicioActivacion)
+    public ControladorAutenticacion(ServicioRegistro servicioRegistro, ServicioActivacion servicioActivacion,
+        ServicioReenvioActivacion servicioReenvio)
     {
         _servicioRegistro = servicioRegistro;
         _servicioActivacion = servicioActivacion;
+        _servicioReenvio = servicioReenvio;
     }
 
     // RF-CA-01: 201 con los datos públicos del usuario, 400 si los datos no son válidos,
@@ -49,5 +52,20 @@ public sealed class ControladorAutenticacion : ControllerBase
         return resultado.Estado == EstadoActivacion.Activada
             ? Ok(new { mensaje = resultado.Mensaje })
             : BadRequest(new { mensaje = resultado.Mensaje });
+    }
+
+    // RF-CA-17: 200 con la misma respuesta exista o no el correo, 400 solo si el correo no tiene
+    // formato válido, 503 si falta configuración del servidor.
+    [HttpPost("reenviar-activacion")]
+    public async Task<IActionResult> ReenviarActivacion([FromBody] SolicitudReenvioActivacion solicitud)
+    {
+        var resultado = await _servicioReenvio.ReenviarAsync(solicitud.Correo);
+
+        return resultado.Estado switch
+        {
+            EstadoReenvio.Aceptado => Ok(new { mensaje = resultado.Mensaje }),
+            EstadoReenvio.NoDisponible => StatusCode(StatusCodes.Status503ServiceUnavailable, new { mensaje = resultado.Mensaje }),
+            _ => BadRequest(new { mensaje = resultado.Mensaje })
+        };
     }
 }

@@ -1,7 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.Comun;
-using Tracking_Tiger.Core.Correo;
 using Tracking_Tiger.Core.Persistencia;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
@@ -19,16 +18,16 @@ public sealed class ServicioRegistro
     private readonly ContextoDatos _contexto;
     private readonly IHasherContrasenas _hasher;
     private readonly IReloj _reloj;
-    private readonly IColaCorreo _cola;
+    private readonly EmisorActivacion _emisor;
     private readonly ILogger<ServicioRegistro> _registro;
 
     public ServicioRegistro(ContextoDatos contexto, IHasherContrasenas hasher, IReloj reloj,
-        IColaCorreo cola, ILogger<ServicioRegistro> registro)
+        EmisorActivacion emisor, ILogger<ServicioRegistro> registro)
     {
         _contexto = contexto;
         _hasher = hasher;
         _reloj = reloj;
-        _cola = cola;
+        _emisor = emisor;
         _registro = registro;
     }
 
@@ -54,30 +53,22 @@ public sealed class ServicioRegistro
         if (await _contexto.Usuarios.AnyAsync(u => u.Correo == correoNormalizado))
             return ResultadoRegistro.CorreoDuplicado();
 
-        // Token de activación (RF-CA-15): en TokensActivacion solo queda su hash. El valor en claro
-        // solo viaja dentro del enlace del correo y nunca se registra en logs.
-        var tokenPlano = GeneradorTokens.GenerarToken();
-
         // Sin APP_URL_BASE no se puede armar el enlace: no se guarda nada y la respuesta es controlada.
-        var enlace = EnlaceActivacion.Construir(tokenPlano);
-        if (!enlace.Exito)
+        var enlace = EmisorActivacion.Preparar(out var errorEnlace);
+        if (enlace is null)
         {
-            _registro.LogError("No se pudo registrar al usuario: {Motivo}", enlace.Mensaje);
+            _registro.LogError("No se pudo registrar al usuario: {Motivo}", errorEnlace);
             return ResultadoRegistro.NoDisponible();
         }
 
         // Nace inactivo por regla de dominio (RF-CA-15).
         var ahora = _reloj.AhoraUtc;
         var usuario = Usuario.CrearNuevo(nombre, correoNormalizado, _hasher.Hashear(contrasena!), ahora);
-        var token = TokenActivacion.Emitir(usuario, GeneradorTokens.CalcularHash(tokenPlano), ahora);
-
         _contexto.Usuarios.Add(usuario);
-        _contexto.TokensActivacion.Add(token);
 
-        // El correo solo se registra en la cola (RF-NOT-08): el registro nunca contacta al servidor SMTP
-        // y termina bien aunque esté caído. Lo envía después el proceso "enviar-correos".
-        var encolado = _cola.Agregar(usuario.Correo, PlantillaCorreoActivacion.Asunto,
-            PlantillaCorreoActivacion.Cuerpo(usuario.Nombre, enlace.Enlace!));
+        // Token y correo de activación (RF-CA-15). El correo solo se registra en la cola (RF-NOT-08):
+        // el registro nunca contacta al servidor SMTP y termina bien aunque esté caído.
+        var encolado = await _emisor.EmitirAsync(usuario, enlace, ahora);
         if (!encolado.Exito)
         {
             _contexto.ChangeTracker.Clear();

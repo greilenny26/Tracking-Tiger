@@ -5,7 +5,7 @@ using Tracking_Tiger.Core.Persistencia;
 namespace Tracking_Tiger.Core.ControlAcceso;
 
 // Activación de cuentas por enlace (RF-CA-16). Toda la regla vive aquí, no en el controlador (RD-02).
-// Un token inexistente, ya usado o vencido se rechaza sin cambiar nada.
+// Un token inexistente, invalidado, ya usado o vencido se rechaza sin cambiar nada.
 public sealed class ServicioActivacion
 {
     private readonly ContextoDatos _contexto;
@@ -30,7 +30,8 @@ public sealed class ServicioActivacion
             .SingleOrDefaultAsync(t => t.TokenHash == tokenHash);
 
         // Las comprobaciones van antes de cualquier cambio: un rechazo no modifica nada en la base.
-        if (token is null)
+        // Un enlace reemplazado por un reenvío (RF-CA-17) se trata como no válido.
+        if (token is null || token.Invalidado)
             return ResultadoActivacion.EnlaceInvalido();
 
         // Un solo uso (RF-CA-16): abrir el enlace por segunda vez se rechaza.
