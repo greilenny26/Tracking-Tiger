@@ -146,6 +146,21 @@
 #   En todos los rechazos: respuesta controlada, sin traza ni excepción, y no se crea el usuario.
 
 ### ------------------------------------------------------------
+### RF-CA-14 — Política mínima de contraseña (validador, sin endpoint todavía)
+### ------------------------------------------------------------
+# Validador: Core/ControlAcceso/PoliticaContrasena.cs. Nunca lanza; devuelve ResultadoValidacion.
+# Se prueba de punta a punta con el registro (y luego con la recuperación y el cambio de
+# contraseña), enviando estos valores en "contrasena":
+#
+#   null o ""        → "La contraseña es obligatoria."
+#   "abc123"         → "La contraseña debe tener al menos 8 caracteres."
+#   "12345678"       → "La contraseña debe incluir al menos una letra."
+#   "abcdefgh"       → "La contraseña debe incluir al menos un número."
+#   "Clave1234"      → aceptada
+#   "contraseña1"    → aceptada (la ñ y las vocales con tilde cuentan como letras)
+#   En todos los rechazos: respuesta controlada, sin traza, y no se crea ni cambia nada.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
