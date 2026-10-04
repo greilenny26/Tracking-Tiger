@@ -96,3 +96,22 @@
 #   Si el servidor rechaza un correo concreto (por ejemplo, un destinatario inválido):
 #   Esperado: "Correo <Id>: El servidor SMTP rechazó al destinatario. Queda pendiente."
 #             y el resto del lote se envía igual.
+
+### ------------------------------------------------------------
+### RD-08 — Manejo global de errores de la API
+### ------------------------------------------------------------
+# Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
+# que lanzaba una excepción con una consulta y una ruta falsas:
+#   Esperado: HTTP 500, Content-Type application/json, aun en Development y con Accept: text/html:
+#             {"mensaje":"Ocurrió un error inesperado. Intenta de nuevo más tarde."}
+#             La consola del servidor muestra "fail: ...ManejadorErroresGlobal" con la excepción real.
+#
+# JSON mal formado: usar el primer endpoint POST que exista (por ejemplo, el de registro).
+POST http://localhost:5000/api/<endpoint-post>
+Content-Type: application/json
+
+{"correo": "ana@example.com",
+
+#   Esperado: HTTP 400
+#             {"mensaje":"El cuerpo de la solicitud no es un JSON válido o no tiene el formato esperado."}
+#   Lo mismo con cuerpo vacío o con un tipo incorrecto (texto donde va un número).

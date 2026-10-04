@@ -2,10 +2,15 @@ using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.Correo;
 using Tracking_Tiger.Core.Persistencia;
+using Tracking_Tiger.Core.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(opciones =>
+        opciones.InvalidModelStateResponseFactory = RespuestaSolicitudInvalida.Crear);
+
+builder.Services.AddExceptionHandler<ManejadorErroresGlobal>();
 
 builder.Services.AddSingleton<IReloj, RelojSistema>();
 
@@ -81,6 +86,10 @@ if (args.Length > 0 && args[0] == "enviar-correos")
 
     return;
 }
+
+// Manejo global de errores (RD-08): se aplica también en Development, así el cliente
+// nunca ve la página de excepciones de desarrollo. La lógica está en ManejadorErroresGlobal.
+app.UseExceptionHandler(_ => { });
 
 app.MapControllers();
 
