@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.ControlAcceso;
@@ -28,6 +29,11 @@ builder.Services.AddScoped<ServicioRegistro>();
 builder.Services.AddScoped<ServicioActivacion>();
 builder.Services.AddScoped<ServicioReenvioActivacion>();
 builder.Services.AddScoped<ServicioSesion>();
+
+// Esquema de autenticación por defecto (RF-CA-07): todo [Authorize] usa la credencial de sesión.
+builder.Services.AddAuthentication(ManejadorAutenticacionSesion.Esquema)
+    .AddScheme<AuthenticationSchemeOptions, ManejadorAutenticacionSesion>(ManejadorAutenticacionSesion.Esquema, null);
+builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IColaCorreo, ColaCorreo>();
 builder.Services.AddSingleton<IEnviadorCorreo, EnviadorSmtp>();
@@ -118,6 +124,9 @@ if (args.Length > 0 && args[0] == "enviar-correos")
 // Manejo global de errores (RD-08): se aplica también en Development, así el cliente
 // nunca ve la página de excepciones de desarrollo. La lógica está en ManejadorErroresGlobal.
 app.UseExceptionHandler(_ => { });
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 

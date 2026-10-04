@@ -59,4 +59,12 @@ public sealed class ServicioSesion
 
         return ResultadoInicioSesion.Iniciada(tokenPlano, sesion.FechaVencimiento);
     }
+
+    // Datos públicos del usuario autenticado (RF-CA-07). Null si el usuario ya no existe.
+    public async Task<UsuarioActual?> ObtenerUsuarioActualAsync(int usuarioId) =>
+        await _contexto.Usuarios
+            .AsNoTracking()
+            .Where(u => u.Id == usuarioId)
+            .Select(u => new UsuarioActual(u.Id, u.Nombre, u.Correo))
+            .SingleOrDefaultAsync();
 }

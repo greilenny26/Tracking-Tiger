@@ -497,6 +497,44 @@ Content-Type: application/json
 #   Esperado: HTTP 200 {"token":"...","venceEn":"..."} y una fila nueva en SesionesUsuario.
 
 ### ------------------------------------------------------------
+### RF-CA-07 — Usuario autenticado: GET /api/auth/yo
+### ------------------------------------------------------------
+# Antes: iniciar sesión con un usuario activo (caso 1 de RF-CA-03) y copiar el "token" de la respuesta.
+
+### 1. Credencial válida
+GET http://localhost:5000/api/auth/yo
+Authorization: Bearer <token-del-login>
+
+#   Esperado: HTTP 200 {"id":<n>,"nombre":"...","correo":"..."}
+#             Los datos salen de la base. La respuesta NO incluye hash de contraseña ni tokens.
+
+### 2. Sin encabezado Authorization
+GET http://localhost:5000/api/auth/yo
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 3. Token inexistente
+GET http://localhost:5000/api/auth/yo
+Authorization: Bearer tokenQueNoExiste123
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 4. Encabezados mal formados (repetir cambiando la línea Authorization)
+GET http://localhost:5000/api/auth/yo
+Authorization: Bearer
+
+#   También con "Authorization: Basic abc", con un token de 500 caracteres o con caracteres
+#   ASCII raros (por ejemplo "Bearer %$#{}<>'!*()").
+#   Esperado en todos: HTTP 401 {"mensaje":"Sesión no válida o vencida."}, nunca HTTP 500 ni trazas.
+#   Con caracteres no ASCII (por ejemplo "Bearer ñandú") el servidor web (Kestrel) rechaza el
+#   encabezado antes de llegar a la aplicación: HTTP 400 sin cuerpo, también sin traza.
+
+### 5. Sesión revocada
+#   En DB Browser: UPDATE SesionesUsuario SET Revocada = 1 WHERE Id = <id-de-la-sesión>;
+#   ("Escribir cambios"). Luego repetir el caso 1 con el mismo token.
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

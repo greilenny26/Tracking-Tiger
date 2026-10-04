@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
@@ -87,5 +89,19 @@ public sealed class ControladorAutenticacion : ControllerBase
             EstadoInicioSesion.CuentaInactiva => StatusCode(StatusCodes.Status403Forbidden, new { mensaje = resultado.Mensaje }),
             _ => Unauthorized(new { mensaje = resultado.Mensaje })
         };
+    }
+
+    // RF-CA-07: datos del usuario autenticado. Sin credencial válida, el esquema de sesión responde 401.
+    [Authorize]
+    [HttpGet("yo")]
+    public async Task<IActionResult> ObtenerUsuarioActual()
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+            return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
+
+        var usuario = await _servicioSesion.ObtenerUsuarioActualAsync(usuarioId);
+        return usuario is null
+            ? Unauthorized(new { mensaje = "Sesión no válida o vencida." })
+            : Ok(new { id = usuario.Id, nombre = usuario.Nombre, correo = usuario.Correo });
     }
 }
