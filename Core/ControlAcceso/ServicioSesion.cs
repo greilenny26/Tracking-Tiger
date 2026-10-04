@@ -6,6 +6,7 @@ namespace Tracking_Tiger.Core.ControlAcceso;
 
 // Inicio de sesión (RF-CA-03). Toda la regla vive aquí, no en el controlador (RD-02).
 // Una cuenta sin activar solo se rechaza como tal después de verificar la contraseña (RF-CA-15).
+// Un inicio de sesión correcto reinicia los intentos fallidos (RF-CA-19).
 public sealed class ServicioSesion
 {
     // Hash ficticio con el mismo algoritmo e iteraciones que los reales. Se calcula una sola vez por
@@ -92,8 +93,20 @@ public sealed class ServicioSesion
         var tokenPlano = GeneradorTokens.GenerarToken();
         var sesion = SesionUsuario.Emitir(usuario, GeneradorTokens.CalcularHash(tokenPlano), _reloj.AhoraUtc);
 
+        // RF-CA-19: un inicio de sesión correcto pone el contador en cero y quita cualquier bloqueo.
+        // Se hace en la misma transacción que la sesión nueva: o quedan ambas cosas o ninguna.
+        await using var transaccion = await _contexto.Database.BeginTransactionAsync();
+
+        await _contexto.Usuarios
+            .Where(u => u.Id == usuario.Id)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.IntentosFallidos, 0)
+                .SetProperty(u => u.BloqueadoHasta, (DateTime?)null));
+
         _contexto.SesionesUsuario.Add(sesion);
         await _contexto.SaveChangesAsync();
+
+        await transaccion.CommitAsync();
 
         return ResultadoInicioSesion.Iniciada(tokenPlano, sesion.FechaVencimiento);
     }

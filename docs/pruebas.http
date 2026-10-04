@@ -655,6 +655,30 @@ Content-Type: application/json
 #   Esperado: HTTP 200 con token.
 
 ### ------------------------------------------------------------
+### RF-CA-19 — Reinicio del contador al iniciar sesión
+### ------------------------------------------------------------
+# Antes: un usuario activo con IntentosFallidos = 0 y BloqueadoHasta = NULL (contraseña "Clave1234").
+
+### 1. Tres fallos y luego la contraseña correcta
+#   Ejecutar 3 veces el login con "OtraClave99" (HTTP 401; IntentosFallidos = 3) y luego:
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 200 con token. En DB Browser: IntentosFallidos = 0 y BloqueadoHasta = NULL.
+
+### 2. Los fallos cuentan solo si son seguidos
+#   4 fallos → 1 login correcto (HTTP 200, contador en 0) → 4 fallos más.
+#   Esperado: la cuenta NO se bloquea (IntentosFallidos = 4, BloqueadoHasta = NULL) y el
+#             siguiente login correcto responde HTTP 200.
+
+### 3. Cuenta sin activar
+#   Con un usuario sin activar: 2 fallos (IntentosFallidos = 2) y luego la contraseña correcta.
+#   Esperado: HTTP 403 "La cuenta no está activa..." e IntentosFallidos sigue en 2
+#             (no es un inicio de sesión correcto, no se reinicia).
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
