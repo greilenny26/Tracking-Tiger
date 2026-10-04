@@ -12,6 +12,7 @@ public static class CatalogoOperaciones
     public const string IniciarSesion = "login";
     public const string ConsultarUsuarioActual = "yo";
     public const string CerrarSesion = "logout";
+    public const string ListarUsuarios = "listar-usuarios";
 
     public static readonly IReadOnlyDictionary<string, ExigenciaAcceso> Exigencias = new Dictionary<string, ExigenciaAcceso>
     {
@@ -21,6 +22,7 @@ public static class CatalogoOperaciones
         [IniciarSesion]          = ExigenciaAcceso.Publica,
         [ConsultarUsuarioActual] = ExigenciaAcceso.Autenticada,
         [CerrarSesion]           = ExigenciaAcceso.Autenticada,
+        [ListarUsuarios]         = ExigenciaAcceso.DeRol(Rol.Administrador),
     };
 }
 

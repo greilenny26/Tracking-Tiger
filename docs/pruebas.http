@@ -779,6 +779,40 @@ Content-Type: application/json
 #    en cada petición, nunca del cuerpo, encabezados ni token.
 
 ### ------------------------------------------------------------
+### RF-CA-21 — Listado de usuarios: GET /api/usuarios (solo Administrador)
+### ------------------------------------------------------------
+# Antes: crear el Administrador con "dotnet run -- crear-admin" e iniciar sesión con él (token de
+# Administrador); tener además un usuario Estándar activo con su propio token.
+
+### 1. Como Administrador
+GET http://localhost:5000/api/usuarios
+Authorization: Bearer <token-del-administrador>
+
+#   Esperado: HTTP 200 [{"id":<n>,"nombre":"...","correo":"...","rol":"Administrador","activo":true}, ...]
+#             Ordenado por fecha de creación (el más antiguo primero).
+#   Cada elemento tiene EXACTAMENTE id, nombre, correo, rol y activo: nunca hashContrasena,
+#   intentosFallidos, bloqueadoHasta, fechaCreacion ni tokens.
+
+### 2. Como usuario Estándar
+GET http://localhost:5000/api/usuarios
+Authorization: Bearer <token-de-un-estándar>
+
+#   Esperado: HTTP 403 {"mensaje":"No tienes permiso para realizar esta operación."}
+
+### 3. Sin sesión
+GET http://localhost:5000/api/usuarios
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 4. Estándar que intenta hacerse pasar por Administrador con encabezados
+GET http://localhost:5000/api/usuarios
+Authorization: Bearer <token-de-un-estándar>
+Rol: Administrador
+X-Rol: Administrador
+
+#   Esperado: HTTP 403 igual que el caso 2 (el rol se lee de la base, nunca de la petición).
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

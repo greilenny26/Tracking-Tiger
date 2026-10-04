@@ -31,6 +31,7 @@ builder.Services.AddScoped<ServicioActivacion>();
 builder.Services.AddScoped<ServicioReenvioActivacion>();
 builder.Services.AddScoped<ServicioSesion>();
 builder.Services.AddScoped<ServicioAdministradorInicial>();
+builder.Services.AddScoped<ServicioAdministracionUsuarios>();
 
 // Esquema de autenticación por defecto (RF-CA-07): valida la credencial de sesión; lo usa
 // FiltroAutorizacionOperaciones para las operaciones que exigen sesión o rol.
