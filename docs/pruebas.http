@@ -66,3 +66,33 @@
 #
 #   Cada fila se guarda como Enviado apenas sale su correo: si el envío se corta a mitad
 #   del lote, las ya enviadas quedan en Enviado y la siguiente ejecución solo envía las restantes.
+
+### ------------------------------------------------------------
+### RF-NOT-08 — El envío tolera fallas del servidor SMTP
+### ------------------------------------------------------------
+# Primero encolar uno o más correos: dotnet run -- encolar-prueba <tu-correo>
+# Usar solo valores falsos en una terminal aparte (no hace falta "call .env.cmd"):
+#
+   #set SMTP_HOST=localhost
+   #set SMTP_PORT=2599
+  #set SMTP_USUARIO=usuario-falso
+  #set SMTP_CLAVE=clave-falsa
+ # dotnet run -- enviar-correos
+#   Esperado (en pocos segundos):
+#     "No se pudo conectar con el servidor SMTP. Revisa SMTP_HOST, SMTP_PORT y la conexión a internet."
+#     "Correos enviados: 0. Quedan pendientes: N."
+#   Código de salida 1, sin trazas, sin mostrar la clave. Todas las filas siguen Pendiente.
+#
+#   set SMTP_HOST=10.255.255.1
+#   set SMTP_PORT=587
+#   dotnet run -- enviar-correos
+#   Esperado (a los ~15 segundos, nunca se cuelga):
+#     "El servidor SMTP no respondió en 15 segundos. ..." y las filas siguen Pendiente.
+#
+#   Luego, en una terminal nueva con "call .env.cmd":
+#   dotnet run -- enviar-correos
+#   Esperado: "Correos enviados: N" — los que quedaron pendientes salen ahora.
+#
+#   Si el servidor rechaza un correo concreto (por ejemplo, un destinatario inválido):
+#   Esperado: "Correo <Id>: El servidor SMTP rechazó al destinatario. Queda pendiente."
+#             y el resto del lote se envía igual.

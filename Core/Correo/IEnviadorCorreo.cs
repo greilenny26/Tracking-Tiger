@@ -1,6 +1,7 @@
 namespace Tracking_Tiger.Core.Correo;
 
 // Envía correos a un servidor real. Abre una sesión por lote para no conectarse una vez por correo.
+// Los fallos se informan siempre como ErrorEnvioCorreo.
 public interface IEnviadorCorreo
 {
     Task<ISesionCorreo> AbrirSesionAsync(ConfiguracionSmtp configuracion);

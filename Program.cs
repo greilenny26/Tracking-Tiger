@@ -67,6 +67,8 @@ if (args.Length > 0 && args[0] == "enviar-correos")
     {
         var resultado = await procesador.ProcesarPendientesAsync();
 
+        foreach (var aviso in resultado.Avisos)
+            Console.WriteLine(aviso);
         Console.WriteLine(resultado.Mensaje);
         Environment.ExitCode = resultado.Exito ? 0 : 1;
     }
