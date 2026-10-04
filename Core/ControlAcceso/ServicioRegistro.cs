@@ -6,7 +6,7 @@ using Tracking_Tiger.Core.Persistencia;
 namespace Tracking_Tiger.Core.ControlAcceso;
 
 // Registro de usuarios con correo único (RF-CA-01). Toda la regla vive aquí, no en el controlador (RD-02).
-// La cuenta queda con Activo en su valor por defecto; la activación llega en otro paso.
+// La cuenta nace inactiva (Usuario.CrearNuevo); la activación llega en otro paso.
 public sealed class ServicioRegistro
 {
     // Debe coincidir con el límite declarado en ContextoDatos.
@@ -48,13 +48,8 @@ public sealed class ServicioRegistro
         if (await _contexto.Usuarios.AnyAsync(u => u.Correo == correoNormalizado))
             return ResultadoRegistro.CorreoDuplicado();
 
-        var usuario = new Usuario
-        {
-            Nombre = nombre,
-            Correo = correoNormalizado,
-            HashContrasena = _hasher.Hashear(contrasena!),
-            FechaCreacion = _reloj.AhoraUtc
-        };
+        // Nace inactivo por regla de dominio (RF-CA-15).
+        var usuario = Usuario.CrearNuevo(nombre, correoNormalizado, _hasher.Hashear(contrasena!), _reloj.AhoraUtc);
 
         _contexto.Usuarios.Add(usuario);
         try
@@ -69,7 +64,7 @@ public sealed class ServicioRegistro
             return ResultadoRegistro.CorreoDuplicado();
         }
 
-        return ResultadoRegistro.Registrado(new UsuarioRegistrado(usuario.Id, usuario.Nombre, usuario.Correo));
+        return ResultadoRegistro.Registrado(new UsuarioRegistrado(usuario.Id, usuario.Nombre, usuario.Correo, usuario.Activo));
     }
 
     private static bool EsCorreoDuplicado(DbUpdateException error) =>

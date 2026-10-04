@@ -28,7 +28,8 @@ public sealed class ControladorAutenticacion : ControllerBase
                 mensaje = resultado.Mensaje,
                 id = resultado.Usuario!.Id,
                 nombre = resultado.Usuario.Nombre,
-                correo = resultado.Usuario.Correo
+                correo = resultado.Usuario.Correo,
+                activo = resultado.Usuario.Activo
             }),
             EstadoRegistro.CorreoDuplicado => Conflict(new { mensaje = resultado.Mensaje }),
             _ => BadRequest(new { mensaje = resultado.Mensaje })

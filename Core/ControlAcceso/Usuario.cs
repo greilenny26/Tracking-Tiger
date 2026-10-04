@@ -20,9 +20,27 @@ public class Usuario
     public string HashContrasena { get; set; } = string.Empty;
 
     // El usuario nace inactivo hasta abrir el enlace de activación (RF-CA-15).
-    public bool Activo { get; set; }
+    // Solo la propia entidad puede cambiarlo; desde fuera es de solo lectura.
+    public bool Activo { get; private set; }
 
     public DateTime FechaCreacion { get; set; }
+
+    // Solo para EF Core al leer filas. Todo usuario nuevo se crea con CrearNuevo.
+    private Usuario()
+    {
+    }
+
+    // Regla de dominio (RF-CA-15): un usuario nuevo SIEMPRE nace inactivo.
+    // El correo se normaliza al asignarlo; el hash ya debe venir calculado.
+    public static Usuario CrearNuevo(string nombre, string correo, string hashContrasena, DateTime fechaCreacionUtc) =>
+        new()
+        {
+            Nombre = nombre,
+            Correo = correo,
+            HashContrasena = hashContrasena,
+            Activo = false,
+            FechaCreacion = fechaCreacionUtc
+        };
 
     // Única regla de normalización del correo; también se usa para buscar usuarios por correo.
     public static string NormalizarCorreo(string correo) =>

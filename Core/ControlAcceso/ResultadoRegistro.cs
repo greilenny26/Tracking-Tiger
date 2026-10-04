@@ -8,13 +8,13 @@ public enum EstadoRegistro
 }
 
 // Datos públicos del usuario recién registrado. Nunca incluye el hash de la contraseña.
-public sealed record UsuarioRegistrado(int Id, string Nombre, string Correo);
+public sealed record UsuarioRegistrado(int Id, string Nombre, string Correo, bool Activo);
 
 // Resultado de intentar registrar un usuario (RF-CA-01). Los rechazos son controlados (RD-07).
 public sealed record ResultadoRegistro(EstadoRegistro Estado, string Mensaje, UsuarioRegistrado? Usuario)
 {
     public static ResultadoRegistro Registrado(UsuarioRegistrado usuario) =>
-        new(EstadoRegistro.Registrado, "La cuenta se registró correctamente.", usuario);
+        new(EstadoRegistro.Registrado, "La cuenta se creó, pero todavía no está activa.", usuario);
 
     public static ResultadoRegistro DatosInvalidos(string mensaje) =>
         new(EstadoRegistro.DatosInvalidos, mensaje, null);

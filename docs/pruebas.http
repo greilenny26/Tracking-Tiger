@@ -172,8 +172,8 @@ Content-Type: application/json
 {"nombre": "Ana Pérez", "correo": "  Ana.Perez@Example.COM ", "contrasena": "Clave1234"}
 
 #   Esperado: HTTP 201
-#             {"mensaje":"La cuenta se registró correctamente.","id":<n>,"nombre":"Ana Pérez",
-#              "correo":"ana.perez@example.com"}
+#             {"mensaje":"La cuenta se creó, pero todavía no está activa.","id":<n>,
+#              "nombre":"Ana Pérez","correo":"ana.perez@example.com","activo":false}
 #             La respuesta NO incluye hashContrasena ni la contraseña.
 #   En DB Browser (tabla Usuarios): Correo = "ana.perez@example.com", Activo = 0,
 #             HashContrasena = "PBKDF2-SHA256$600000$...$...", FechaCreacion en UTC.
