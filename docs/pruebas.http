@@ -582,6 +582,43 @@ POST http://localhost:5000/api/auth/logout
 #   Esperado: HTTP 200 con los datos del usuario; en la base solo la sesión de A tiene Revocada = 1.
 
 ### ------------------------------------------------------------
+### RF-CA-19 — Intentos fallidos de inicio de sesión (conteo)
+### ------------------------------------------------------------
+# Solo el conteo: todavía NO hay bloqueo ni se reinicia el contador.
+# Antes: un usuario activo registrado (contraseña "Clave1234"); en DB Browser, IntentosFallidos = 0.
+
+### 1. Contraseña incorrecta de un usuario existente (ejecutar 3 veces)
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "OtraClave99"}
+
+#   Esperado cada vez: HTTP 401 {"mensaje":"Credenciales inválidas."}
+#   En DB Browser: Usuarios.IntentosFallidos = 3 para ese usuario.
+
+### 2. Correo inexistente
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "nadie@example.com", "contrasena": "OtraClave99"}
+
+#   Esperado: el mismo HTTP 401 {"mensaje":"Credenciales inválidas."}, byte por byte.
+#   No cambia ninguna fila de Usuarios.
+
+### 3. Contraseña correcta después de fallar
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 200 con token. IntentosFallidos sigue en 3 (todavía no se reinicia).
+#   Tampoco hay bloqueo: con más de 5 fallos el inicio de sesión correcto sigue funcionando.
+
+### 4. Cuenta sin activar + contraseña incorrecta
+#   Repetir el caso 1 con el correo de un usuario sin activar.
+#   Esperado: el mismo HTTP 401 y su IntentosFallidos también aumenta (es un usuario existente).
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

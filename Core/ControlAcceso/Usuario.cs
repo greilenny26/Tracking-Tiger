@@ -23,6 +23,10 @@ public class Usuario
     // Solo la propia entidad puede cambiarlo; desde fuera es de solo lectura.
     public bool Activo { get; private set; }
 
+    // Intentos fallidos de inicio de sesión (RF-CA-19). Solo lo incrementa el servicio de sesión
+    // con una actualización atómica en la base; el bloqueo y el reinicio llegan en pasos aparte.
+    public int IntentosFallidos { get; private set; }
+
     public DateTime FechaCreacion { get; set; }
 
     // Solo para EF Core al leer filas. Todo usuario nuevo se crea con CrearNuevo.

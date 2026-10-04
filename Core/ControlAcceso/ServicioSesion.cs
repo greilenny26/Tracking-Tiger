@@ -41,7 +41,16 @@ public sealed class ServicioSesion
         var contrasenaCorrecta = _hasher.Verificar(contrasena, hashAComparar);
 
         if (usuario is null || !contrasenaCorrecta)
+        {
+            // RF-CA-19: una contraseña incorrecta de un usuario EXISTENTE suma un intento fallido.
+            // Un correo inexistente no cambia nada. La respuesta es la misma en ambos casos.
+            if (usuario is not null)
+                await _contexto.Usuarios
+                    .Where(u => u.Id == usuario.Id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(u => u.IntentosFallidos, u => u.IntentosFallidos + 1));
+
             return ResultadoInicioSesion.CredencialesInvalidas();
+        }
 
         // RF-CA-15: la cuenta sin activar se informa SOLO cuando la contraseña ya es correcta. Con una
         // contraseña incorrecta sale el 401 genérico de arriba, así quien no conoce la contraseña

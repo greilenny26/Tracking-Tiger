@@ -41,6 +41,7 @@ public class ContextoDatos : DbContext
             usuario.Property(u => u.Correo).IsRequired().HasMaxLength(320);
             usuario.Property(u => u.HashContrasena).IsRequired();
             usuario.Property(u => u.Activo).IsRequired();
+            usuario.Property(u => u.IntentosFallidos).IsRequired().HasDefaultValue(0);
             usuario.Property(u => u.FechaCreacion).IsRequired();
             // RF-CA-01: la base rechaza un segundo usuario con el mismo correo.
             usuario.HasIndex(u => u.Correo).IsUnique();
