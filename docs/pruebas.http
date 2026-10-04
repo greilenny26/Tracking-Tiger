@@ -98,6 +98,27 @@
 #             y el resto del lote se envía igual.
 
 ### ------------------------------------------------------------
+### RF-CA-01 — Tabla Usuarios con correo único (base de datos, no HTTP)
+### ------------------------------------------------------------
+# Todavía no hay endpoint de registro. Se verifica en DB Browser sobre trackingtiger.db,
+# después de ".\skills.cmd db-migrate CrearUsuario" (o "dotnet ef database update"):
+#
+#   Esperado: existe la tabla Usuarios con Id, Nombre, Correo, HashContrasena, Activo,
+#             FechaCreacion, y el índice IX_Usuarios_Correo marcado como UNIQUE.
+#             No hay columna de rol.
+#
+#   En la pestaña "Ejecutar SQL":
+#   INSERT INTO Usuarios (Nombre, Correo, HashContrasena, Activo, FechaCreacion)
+#   VALUES ('Ana', 'ana@example.com', 'x', 0, '2026-10-04 00:00:00');
+#   (repetir el mismo INSERT)
+#   Esperado: el segundo falla con "UNIQUE constraint failed: Usuarios.Correo".
+#   Borrar la fila de prueba al terminar.
+#
+#   La normalización (sin espacios y en minúsculas) la hace la entidad al asignar Correo:
+#   " Ana@Example.COM " se guarda como "ana@example.com". Se comprueba de punta a punta
+#   cuando exista el registro.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
