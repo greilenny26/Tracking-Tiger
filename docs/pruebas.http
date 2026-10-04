@@ -375,6 +375,310 @@ GET http://localhost:5000/api/auth/activar?token=<token-del-enlace-B>
 #   Los tokens ya usados no se tocan al reenviar (solo se invalidan los que no se usaron).
 
 ### ------------------------------------------------------------
+### RD-09 — Migraciones aplicadas automáticamente al iniciar
+### ------------------------------------------------------------
+# Simula un clon nuevo: cerrar DB Browser y la API, y renombrar (no borrar) trackingtiger.db,
+# por ejemplo a trackingtiger.respaldo.db. Sin ejecutar "dotnet ef database update":
+#
+#   1) dotnet run -- encolar-prueba prueba@example.com
+#   Esperado: "El correo quedó en la cola en estado pendiente. Id: 1". Se crea trackingtiger.db
+#             con todas las tablas (Usuarios, TokensActivacion, CorreosEnCola, __EFMigrationsHistory).
+#
+#   2) Borrar el trackingtiger.db recién creado y ejecutar: dotnet run -- enviar-correos
+#   Esperado: "No hay correos pendientes." Se crea trackingtiger.db migrada, sin error de tabla inexistente.
+#
+#   3) Borrar el trackingtiger.db recién creado y ejecutar: dotnet run
+#   Esperado: la API inicia normalmente y crea trackingtiger.db migrada. Luego:
+GET http://localhost:5000/api/auth/activar?token=tokenQueNoExiste123
+
+#   Esperado: HTTP 400 {"mensaje":"El enlace de activación no es válido."} (las tablas existen).
+#
+#   4) Volver a iniciar con la base ya creada: arranca igual, sin cambios ni errores (no hay pendientes).
+#   En DB Browser, __EFMigrationsHistory lista todas las migraciones de la carpeta Migrations/.
+#   Al terminar, restaurar el respaldo con su nombre original si se quieren conservar los datos.
+
+### ------------------------------------------------------------
+### RF-CA-03 — Tabla SesionesUsuario (base de datos, sin endpoint todavía)
+### ------------------------------------------------------------
+# Iniciar la API una vez ("dotnet run"; aplica la migración CrearSesionUsuario si falta)
+# y abrir trackingtiger.db en DB Browser:
+#
+#   Esperado: existe la tabla SesionesUsuario con Id, UsuarioId, TokenHash, FechaEmision,
+#             FechaVencimiento y Revocada (valor por defecto 0).
+#             Índices: IX_SesionesUsuario_TokenHash marcado UNIQUE e IX_SesionesUsuario_UsuarioId.
+#             Clave foránea UsuarioId → Usuarios(Id) con borrado en cascada.
+#             TokenHash tiene largo máximo 64: solo guarda el SHA-256 en hexadecimal, nunca el token.
+#   En __EFMigrationsHistory aparece ...._CrearSesionUsuario.
+#   El inicio de sesión que crea filas aquí llega en el siguiente paso.
+
+### ------------------------------------------------------------
+### RF-CA-03 — Inicio de sesión: POST /api/auth/login
+### ------------------------------------------------------------
+# El inicio de sesión exige cuenta activa (RF-CA-15).
+# Antes del caso 1: registrar un usuario con el caso 1 de RF-CA-01 (contraseña "Clave1234")
+# y activarlo con su enlace (caso 1 de RF-CA-16).
+
+### 1. Credenciales correctas (el correo admite mayúsculas y espacios: se normaliza)
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "alexabello383@gmail.com ", "contrasena": "Clave4321"}
+
+#   Esperado: HTTP 200 {"token":"<43 caracteres Base64Url>","venceEn":"<fecha UTC terminada en Z>"}
+#             venceEn = ahora (UTC) + 8 horas.
+#   En DB Browser (SesionesUsuario): fila nueva con UsuarioId del usuario, TokenHash = SHA-256 del
+#             token en hexadecimal (64 caracteres, distinto del token), FechaEmision en UTC,
+#             FechaVencimiento = FechaEmision + 8 h, Revocada = 0.
+#   El token en claro NO está en la base ni en la consola del servidor.
+#   Repetir el login: devuelve un token distinto y crea otra fila.
+
+### 2. Contraseña incorrecta
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "OtraClave99"}
+
+#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."}. No se crea ninguna sesión.
+#             Mismo código y mismo cuerpo, byte por byte, que el caso 3: no revela qué dato falló.
+
+### 3. Correo inexistente
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "nadie@example.com", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."} — mismo código y mismo cuerpo que el
+#             caso 2: no revela si el correo está registrado. No se crea ninguna sesión.
+
+### 4. Campos vacíos o ausentes
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo es obligatorio."}
+#   Con {"correo":"ana@example.com","contrasena":""} o sin "contrasena":
+#             HTTP 400 {"mensaje":"La contraseña es obligatoria."}
+
+### 5. Tiempo de respuesta similar: correo inexistente vs. contraseña incorrecta
+#   En PowerShell (sirve en 5.1 y en 7), con la API corriendo. Hacer primero una petición cualquiera
+#   para descartarla: la primera tras iniciar es más lenta porque calcula el hash ficticio.
+#
+#   function Medir($cuerpo) { (Measure-Command { try { Invoke-WebRequest http://localhost:5000/api/auth/login -Method Post -ContentType "application/json" -Body $cuerpo -UseBasicParsing } catch {} }).TotalMilliseconds }
+#   1..5 | ForEach-Object { "inexistente: " + (Medir '{"correo":"nadie@example.com","contrasena":"Clave1234"}') }
+#   1..5 | ForEach-Object { "clave mala:  " + (Medir '{"correo":"<correo-registrado>","contrasena":"OtraClave99"}') }
+#
+#   Esperado: tiempos parecidos en ambos grupos (unos cientos de ms cada uno, por el PBKDF2),
+#             sin una diferencia constante entre correo inexistente y contraseña incorrecta.
+#   La consola del servidor no muestra el correo ni la contraseña de ninguna petición.
+#   No se crea ninguna sesión.
+
+### 6. Cuenta sin activar + contraseña correcta
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-de-un-usuario-sin-activar>", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 403 {"mensaje":"La cuenta no está activa. Revisa tu correo para activarla."}
+#   No se crea ninguna sesión.
+
+### 7. Cuenta sin activar + contraseña incorrecta
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-de-un-usuario-sin-activar>", "contrasena": "OtraClave99"}
+
+#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."} — idéntico a los casos 2 y 3:
+#             sin la contraseña correcta no se puede saber si la cuenta está activa.
+#   No se crea ninguna sesión.
+
+### 8. Después de activar
+#   Abrir el enlace de activación de ese usuario (caso 1 de RF-CA-16) y repetir el caso 6.
+#   Esperado: HTTP 200 {"token":"...","venceEn":"..."} y una fila nueva en SesionesUsuario.
+
+### ------------------------------------------------------------
+### RF-CA-07 — Usuario autenticado: GET /api/auth/yo
+### ------------------------------------------------------------
+# Antes: iniciar sesión con un usuario activo (caso 1 de RF-CA-03) y copiar el "token" de la respuesta.
+# Todo caso de sesión no válida responde exactamente HTTP 401 {"mensaje":"Sesión no válida o vencida."}.
+
+### 1. Credencial válida
+GET http://localhost:5000/api/auth/yo
+Authorization: Bearer <token-del-login>
+
+#   Esperado: HTTP 200 {"id":<n>,"nombre":"...","correo":"..."}
+#             Los datos salen de la base. La respuesta NO incluye hash de contraseña ni tokens.
+
+### 2. Sin encabezado Authorization
+GET http://localhost:5000/api/auth/yo
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 3. Token inexistente
+GET http://localhost:5000/api/auth/yo
+Authorization: Bearer tokenQueNoExiste123
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 4. Encabezados mal formados (repetir cambiando la línea Authorization)
+GET http://localhost:5000/api/auth/yo
+Authorization: Bearer
+
+#   También con "Authorization: Basic abc", con un token de 500 caracteres o con caracteres
+#   ASCII raros (por ejemplo "Bearer %$#{}<>'!*()").
+#   Esperado en todos: HTTP 401 {"mensaje":"Sesión no válida o vencida."}, nunca HTTP 500 ni trazas.
+#   Con caracteres no ASCII (por ejemplo "Bearer ñandú") el servidor web (Kestrel) rechaza el
+#   encabezado antes de llegar a la aplicación: HTTP 400 sin cuerpo, también sin traza.
+
+### 5. Sesión revocada
+#   En DB Browser: UPDATE SesionesUsuario SET Revocada = 1 WHERE Id = <id-de-la-sesión>;
+#   ("Escribir cambios"). Luego repetir el caso 1 con el mismo token.
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 6. Sesión vencida
+#   En DB Browser: UPDATE SesionesUsuario SET FechaVencimiento = '2020-01-01 00:00:00' WHERE Id = <id>;
+#   ("Escribir cambios"). Luego repetir el caso 1 con ese token.
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+#   El vencimiento se compara con IReloj.AhoraUtc (UTC), no con la hora local.
+
+### 7. Usuario que ya no está activo
+#   Iniciar sesión de nuevo (token nuevo). En DB Browser: UPDATE Usuarios SET Activo = 0 WHERE Id = <id>;
+#   Luego repetir el caso 1 con ese token.
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."} — el mismo mensaje que en los demás casos.
+#   Volver a poner Activo = 1 al terminar.
+
+### ------------------------------------------------------------
+### RF-CA-18 — Cierre de sesión: POST /api/auth/logout
+### ------------------------------------------------------------
+# Antes: iniciar sesión con un usuario activo (caso 1 de RF-CA-03) y copiar el "token".
+
+### 1. Cerrar sesión con un token válido
+POST http://localhost:5000/api/auth/logout
+Authorization: Bearer <token-del-login>
+
+#   Esperado: HTTP 200 {"mensaje":"Sesión cerrada correctamente."}
+#   En DB Browser: esa fila de SesionesUsuario queda con Revocada = 1.
+
+### 2. Usar la credencial cerrada
+GET http://localhost:5000/api/auth/yo
+Authorization: Bearer <token-del-login>
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 3. Cerrar sesión otra vez con el mismo token
+POST http://localhost:5000/api/auth/logout
+Authorization: Bearer <token-del-login>
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."} (el esquema ya la rechaza).
+
+### 4. Cerrar sesión sin token
+POST http://localhost:5000/api/auth/logout
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 5. Solo se cierra la sesión actual
+#   Iniciar sesión dos veces con el mismo usuario (tokens A y B). Cerrar sesión con A (caso 1).
+#   Luego GET /api/auth/yo con B.
+#   Esperado: HTTP 200 con los datos del usuario; en la base solo la sesión de A tiene Revocada = 1.
+
+### ------------------------------------------------------------
+### RF-CA-19 — Intentos fallidos de inicio de sesión (conteo)
+### ------------------------------------------------------------
+# Solo el conteo: todavía NO hay bloqueo ni se reinicia el contador.
+# Antes: un usuario activo registrado (contraseña "Clave1234"); en DB Browser, IntentosFallidos = 0.
+
+### 1. Contraseña incorrecta de un usuario existente (ejecutar 3 veces)
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "OtraClave99"}
+
+#   Esperado cada vez: HTTP 401 {"mensaje":"Credenciales inválidas."}
+#   En DB Browser: Usuarios.IntentosFallidos = 3 para ese usuario.
+
+### 2. Correo inexistente
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "nadie@example.com", "contrasena": "OtraClave99"}
+
+#   Esperado: el mismo HTTP 401 {"mensaje":"Credenciales inválidas."}, byte por byte.
+#   No cambia ninguna fila de Usuarios.
+
+### 3. Contraseña correcta después de fallar
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 200 con token. IntentosFallidos sigue en 3 (todavía no se reinicia).
+#   Tampoco hay bloqueo: con más de 5 fallos el inicio de sesión correcto sigue funcionando.
+
+### 4. Cuenta sin activar + contraseña incorrecta
+#   Repetir el caso 1 con el correo de un usuario sin activar.
+#   Esperado: el mismo HTTP 401 y su IntentosFallidos también aumenta (es un usuario existente).
+
+### ------------------------------------------------------------
+### RF-CA-19 — Bloqueo temporal tras 5 intentos fallidos
+### ------------------------------------------------------------
+# Antes: un usuario activo con IntentosFallidos = 0 y BloqueadoHasta = NULL (contraseña "Clave1234").
+
+### 1. Cinco contraseñas incorrectas seguidas (ejecutar 5 veces)
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "OtraClave99"}
+
+#   Esperado: las 5 veces HTTP 401 {"mensaje":"Credenciales inválidas."}
+#   Tras el 5.º: IntentosFallidos = 5 y BloqueadoHasta ≈ ahora (UTC) + 15 minutos.
+
+### 2. Sexto intento con la contraseña CORRECTA
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 429 {"mensaje":"Cuenta bloqueada temporalmente. Intenta de nuevo más tarde."}
+#   IntentosFallidos sigue en 5 y BloqueadoHasta no cambia (no se extiende).
+
+### 3. Más intentos durante el bloqueo (correctos o incorrectos)
+#   Repetir los casos 1 y 2.
+#   Esperado: siempre HTTP 429 con el mismo mensaje; no cambia ninguna columna.
+
+### 4. Bloqueo vencido + contraseña incorrecta
+#   En DB Browser: UPDATE Usuarios SET BloqueadoHasta = '2020-01-01 00:00:00' WHERE Id = <id>;
+#   ("Escribir cambios"). Luego repetir el caso 1 una vez.
+#   Esperado: HTTP 401; IntentosFallidos = 1 y BloqueadoHasta = NULL (se reinició antes de procesar).
+
+### 5. Bloqueo vencido + contraseña correcta
+#   Volver a bloquear (caso 1 hasta el 5.º fallo), vencer el bloqueo como en el caso 4 y repetir el caso 2.
+#   Esperado: HTTP 200 con token.
+
+### ------------------------------------------------------------
+### RF-CA-19 — Reinicio del contador al iniciar sesión
+### ------------------------------------------------------------
+# Antes: un usuario activo con IntentosFallidos = 0 y BloqueadoHasta = NULL (contraseña "Clave1234").
+
+### 1. Tres fallos y luego la contraseña correcta
+#   Ejecutar 3 veces el login con "OtraClave99" (HTTP 401; IntentosFallidos = 3) y luego:
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 200 con token. En DB Browser: IntentosFallidos = 0 y BloqueadoHasta = NULL.
+
+### 2. Los fallos cuentan solo si son seguidos
+#   4 fallos → 1 login correcto (HTTP 200, contador en 0) → 4 fallos más.
+#   Esperado: la cuenta NO se bloquea (IntentosFallidos = 4, BloqueadoHasta = NULL) y el
+#             siguiente login correcto responde HTTP 200.
+
+### 3. Cuenta sin activar
+#   Con un usuario sin activar: 2 fallos (IntentosFallidos = 2) y luego la contraseña correcta.
+#   Esperado: HTTP 403 "La cuenta no está activa..." e IntentosFallidos sigue en 2
+#             (no es un inicio de sesión correcto, no se reinicia).
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

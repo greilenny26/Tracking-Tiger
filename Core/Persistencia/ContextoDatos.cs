@@ -15,6 +15,7 @@ public class ContextoDatos : DbContext
     public DbSet<CorreoEnCola> CorreosEnCola => Set<CorreoEnCola>();
     public DbSet<Usuario> Usuarios => Set<Usuario>();
     public DbSet<TokenActivacion> TokensActivacion => Set<TokenActivacion>();
+    public DbSet<SesionUsuario> SesionesUsuario => Set<SesionUsuario>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,6 +41,8 @@ public class ContextoDatos : DbContext
             usuario.Property(u => u.Correo).IsRequired().HasMaxLength(320);
             usuario.Property(u => u.HashContrasena).IsRequired();
             usuario.Property(u => u.Activo).IsRequired();
+            usuario.Property(u => u.IntentosFallidos).IsRequired().HasDefaultValue(0);
+            usuario.Property(u => u.BloqueadoHasta);
             usuario.Property(u => u.FechaCreacion).IsRequired();
             // RF-CA-01: la base rechaza un segundo usuario con el mismo correo.
             usuario.HasIndex(u => u.Correo).IsUnique();
@@ -59,6 +62,22 @@ public class ContextoDatos : DbContext
             token.HasOne(t => t.Usuario)
                 .WithMany()
                 .HasForeignKey(t => t.UsuarioId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SesionUsuario>(sesion =>
+        {
+            sesion.ToTable("SesionesUsuario");
+            sesion.HasKey(s => s.Id);
+            sesion.Property(s => s.TokenHash).IsRequired().HasMaxLength(64);
+            sesion.Property(s => s.FechaEmision).IsRequired();
+            sesion.Property(s => s.FechaVencimiento).IsRequired();
+            sesion.Property(s => s.Revocada).IsRequired().HasDefaultValue(false);
+            // Cada petición autenticada busca la sesión por el hash de su token.
+            sesion.HasIndex(s => s.TokenHash).IsUnique();
+            sesion.HasOne(s => s.Usuario)
+                .WithMany()
+                .HasForeignKey(s => s.UsuarioId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Tracking_Tiger.Core.Persistencia;
 
@@ -10,9 +11,11 @@ using Tracking_Tiger.Core.Persistencia;
 namespace Tracking_Tiger.Migrations
 {
     [DbContext(typeof(ContextoDatos))]
-    partial class ContextoDatosModelSnapshot : ModelSnapshot
+    [Migration("20261004225315_AgregarIntentosFallidos")]
+    partial class AgregarIntentosFallidos
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -96,9 +99,6 @@ namespace Tracking_Tiger.Migrations
 
                     b.Property<bool>("Activo")
                         .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("BloqueadoHasta")
-                        .HasColumnType("TEXT");
 
                     b.Property<string>("Correo")
                         .IsRequired()

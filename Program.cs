@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.ControlAcceso;
@@ -27,12 +28,34 @@ builder.Services.AddScoped<EmisorActivacion>();
 builder.Services.AddScoped<ServicioRegistro>();
 builder.Services.AddScoped<ServicioActivacion>();
 builder.Services.AddScoped<ServicioReenvioActivacion>();
+builder.Services.AddScoped<ServicioSesion>();
+
+// Esquema de autenticación por defecto (RF-CA-07): todo [Authorize] usa la credencial de sesión.
+builder.Services.AddAuthentication(ManejadorAutenticacionSesion.Esquema)
+    .AddScheme<AuthenticationSchemeOptions, ManejadorAutenticacionSesion>(ManejadorAutenticacionSesion.Esquema, null);
+builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IColaCorreo, ColaCorreo>();
 builder.Services.AddSingleton<IEnviadorCorreo, EnviadorSmtp>();
 builder.Services.AddScoped<ProcesadorColaCorreo>();
 
 var app = builder.Build();
+
+// Paso único de arranque (RD-09): aplica las migraciones pendientes antes de cualquier punto de entrada
+// (servidor web, encolar-prueba, enviar-correos). Con un clon nuevo crea la base de datos desde cero;
+// si ya está al día, no hace nada.
+try
+{
+    using var alcanceMigracion = app.Services.CreateScope();
+    alcanceMigracion.ServiceProvider.GetRequiredService<ContextoDatos>().Database.Migrate();
+}
+catch (Exception)
+{
+    // RD-08: no se muestran trazas ni consultas.
+    Console.WriteLine("No se pudo preparar la base de datos. Verifica que el archivo no esté en uso y que haya permisos de escritura.");
+    Environment.ExitCode = 1;
+    return;
+}
 
 // Comando de desarrollo: dotnet run -- encolar-prueba <destinatario>
 // Encola un correo de prueba y termina sin levantar el servidor web.
@@ -101,6 +124,9 @@ if (args.Length > 0 && args[0] == "enviar-correos")
 // Manejo global de errores (RD-08): se aplica también en Development, así el cliente
 // nunca ve la página de excepciones de desarrollo. La lógica está en ManejadorErroresGlobal.
 app.UseExceptionHandler(_ => { });
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 

@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
@@ -10,13 +12,15 @@ public sealed class ControladorAutenticacion : ControllerBase
     private readonly ServicioRegistro _servicioRegistro;
     private readonly ServicioActivacion _servicioActivacion;
     private readonly ServicioReenvioActivacion _servicioReenvio;
+    private readonly ServicioSesion _servicioSesion;
 
     public ControladorAutenticacion(ServicioRegistro servicioRegistro, ServicioActivacion servicioActivacion,
-        ServicioReenvioActivacion servicioReenvio)
+        ServicioReenvioActivacion servicioReenvio, ServicioSesion servicioSesion)
     {
         _servicioRegistro = servicioRegistro;
         _servicioActivacion = servicioActivacion;
         _servicioReenvio = servicioReenvio;
+        _servicioSesion = servicioSesion;
     }
 
     // RF-CA-01: 201 con los datos públicos del usuario, 400 si los datos no son válidos,
@@ -67,5 +71,51 @@ public sealed class ControladorAutenticacion : ControllerBase
             EstadoReenvio.NoDisponible => StatusCode(StatusCodes.Status503ServiceUnavailable, new { mensaje = resultado.Mensaje }),
             _ => BadRequest(new { mensaje = resultado.Mensaje })
         };
+    }
+
+    // RF-CA-03: 200 con la credencial de sesión y su vencimiento (UTC), 400 si falta el correo
+    // o la contraseña, 403 si la contraseña es correcta pero la cuenta no está activa (RF-CA-15),
+    // 429 mientras la cuenta está bloqueada por intentos fallidos (RF-CA-19),
+    // 401 con el mismo mensaje ante cualquier otra falla.
+    // El token en claro solo aparece en esta respuesta.
+    [HttpPost("login")]
+    public async Task<IActionResult> IniciarSesion([FromBody] SolicitudInicioSesion solicitud)
+    {
+        var resultado = await _servicioSesion.IniciarSesionAsync(solicitud.Correo, solicitud.Contrasena);
+
+        return resultado.Estado switch
+        {
+            EstadoInicioSesion.Iniciada => Ok(new { token = resultado.Token, venceEn = resultado.VenceEn }),
+            EstadoInicioSesion.DatosInvalidos => BadRequest(new { mensaje = resultado.Mensaje }),
+            EstadoInicioSesion.CuentaInactiva => StatusCode(StatusCodes.Status403Forbidden, new { mensaje = resultado.Mensaje }),
+            EstadoInicioSesion.Bloqueada => StatusCode(StatusCodes.Status429TooManyRequests, new { mensaje = resultado.Mensaje }),
+            _ => Unauthorized(new { mensaje = resultado.Mensaje })
+        };
+    }
+
+    // RF-CA-07: datos del usuario autenticado. Sin credencial válida, el esquema de sesión responde 401.
+    [Authorize]
+    [HttpGet("yo")]
+    public async Task<IActionResult> ObtenerUsuarioActual()
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+            return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
+
+        var usuario = await _servicioSesion.ObtenerUsuarioActualAsync(usuarioId);
+        return usuario is null
+            ? Unauthorized(new { mensaje = "Sesión no válida o vencida." })
+            : Ok(new { id = usuario.Id, nombre = usuario.Nombre, correo = usuario.Correo });
+    }
+
+    // RF-CA-18: cierra la sesión actual. Sin sesión válida, el esquema responde 401 antes de llegar aquí.
+    [Authorize]
+    [HttpPost("logout")]
+    public async Task<IActionResult> CerrarSesion()
+    {
+        if (!int.TryParse(User.FindFirstValue(ManejadorAutenticacionSesion.ClaimSesionId), out var sesionId))
+            return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
+
+        await _servicioSesion.CerrarSesionAsync(sesionId);
+        return Ok(new { mensaje = "Sesión cerrada correctamente." });
     }
 }
