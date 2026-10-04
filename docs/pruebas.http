@@ -548,6 +548,40 @@ Authorization: Bearer
 #   Volver a poner Activo = 1 al terminar.
 
 ### ------------------------------------------------------------
+### RF-CA-18 — Cierre de sesión: POST /api/auth/logout
+### ------------------------------------------------------------
+# Antes: iniciar sesión con un usuario activo (caso 1 de RF-CA-03) y copiar el "token".
+
+### 1. Cerrar sesión con un token válido
+POST http://localhost:5000/api/auth/logout
+Authorization: Bearer <token-del-login>
+
+#   Esperado: HTTP 200 {"mensaje":"Sesión cerrada correctamente."}
+#   En DB Browser: esa fila de SesionesUsuario queda con Revocada = 1.
+
+### 2. Usar la credencial cerrada
+GET http://localhost:5000/api/auth/yo
+Authorization: Bearer <token-del-login>
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 3. Cerrar sesión otra vez con el mismo token
+POST http://localhost:5000/api/auth/logout
+Authorization: Bearer <token-del-login>
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."} (el esquema ya la rechaza).
+
+### 4. Cerrar sesión sin token
+POST http://localhost:5000/api/auth/logout
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 5. Solo se cierra la sesión actual
+#   Iniciar sesión dos veces con el mismo usuario (tokens A y B). Cerrar sesión con A (caso 1).
+#   Luego GET /api/auth/yo con B.
+#   Esperado: HTTP 200 con los datos del usuario; en la base solo la sesión de A tiene Revocada = 1.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

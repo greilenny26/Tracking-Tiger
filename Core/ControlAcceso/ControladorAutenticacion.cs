@@ -104,4 +104,16 @@ public sealed class ControladorAutenticacion : ControllerBase
             ? Unauthorized(new { mensaje = "Sesión no válida o vencida." })
             : Ok(new { id = usuario.Id, nombre = usuario.Nombre, correo = usuario.Correo });
     }
+
+    // RF-CA-18: cierra la sesión actual. Sin sesión válida, el esquema responde 401 antes de llegar aquí.
+    [Authorize]
+    [HttpPost("logout")]
+    public async Task<IActionResult> CerrarSesion()
+    {
+        if (!int.TryParse(User.FindFirstValue(ManejadorAutenticacionSesion.ClaimSesionId), out var sesionId))
+            return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
+
+        await _servicioSesion.CerrarSesionAsync(sesionId);
+        return Ok(new { mensaje = "Sesión cerrada correctamente." });
+    }
 }

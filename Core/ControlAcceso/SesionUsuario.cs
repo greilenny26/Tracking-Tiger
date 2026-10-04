@@ -21,6 +21,9 @@ public class SesionUsuario
     {
     }
 
+    // Cierra la sesión (RF-CA-18): a partir de aquí el esquema de autenticación la rechaza.
+    public void Revocar() => Revocada = true;
+
     public static SesionUsuario Emitir(Usuario usuario, string tokenHash, DateTime ahoraUtc) =>
         new()
         {

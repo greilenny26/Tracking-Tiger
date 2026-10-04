@@ -60,6 +60,18 @@ public sealed class ServicioSesion
         return ResultadoInicioSesion.Iniciada(tokenPlano, sesion.FechaVencimiento);
     }
 
+    // Cierre de sesión (RF-CA-18): revoca solo la sesión indicada; las demás sesiones del usuario siguen válidas.
+    // No valida la sesión: eso ya lo hizo el esquema de autenticación antes de llegar aquí.
+    public async Task CerrarSesionAsync(int sesionId)
+    {
+        var sesion = await _contexto.SesionesUsuario.SingleOrDefaultAsync(s => s.Id == sesionId);
+        if (sesion is null)
+            return;
+
+        sesion.Revocar();
+        await _contexto.SaveChangesAsync();
+    }
+
     // Datos públicos del usuario autenticado (RF-CA-07). Null si el usuario ya no existe.
     public async Task<UsuarioActual?> ObtenerUsuarioActualAsync(int usuarioId) =>
         await _contexto.Usuarios
