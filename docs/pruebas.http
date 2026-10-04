@@ -759,6 +759,26 @@ Content-Type: application/json
 #             {"id":<n>,"nombre":"Administrador","correo":"admin@example.com","rol":"Administrador"}
 
 ### ------------------------------------------------------------
+### RF-CA-05 — Catálogo único de operaciones (quién puede ejecutar cada una)
+### ------------------------------------------------------------
+# 1) Revisión de código: Core/ControlAcceso/CatalogoOperaciones.cs lista las 6 operaciones:
+#      registro, activar, reenviar-activacion, login → Publica
+#      yo, logout                                   → Autenticada
+#    Lo aplica un único filtro (Core/ControlAcceso/FiltroAutorizacionOperaciones.cs).
+#    Buscar "[Authorize]" en el proyecto: no aparece en ningún endpoint.
+#
+# 2) El comportamiento no cambia (repetir los casos existentes):
+#    - registro, activar, reenviar-activacion y login funcionan sin sesión, igual que antes.
+#    - GET /api/auth/yo y POST /api/auth/logout sin sesión → HTTP 401
+#      {"mensaje":"Sesión no válida o vencida."}; con sesión válida → HTTP 200 (casos RF-CA-07 y RF-CA-18).
+#
+# 3) Denegar por defecto y exigencia de rol: todavía no hay endpoints de Administrador ni endpoints
+#    fuera del catálogo, así que no se pueden provocar desde fuera. Cuando exista la primera
+#    operación de Administrador: un usuario Estándar recibe HTTP 403
+#    {"mensaje":"No tienes permiso para realizar esta operación."}; el rol se lee de la base
+#    en cada petición, nunca del cuerpo, encabezados ni token.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

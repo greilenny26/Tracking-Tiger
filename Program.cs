@@ -12,7 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Information. GET /api/auth/activar?token=... dejaría el token en claro en la consola del servidor.
 builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 
-builder.Services.AddControllers()
+// RF-CA-05: el filtro de operaciones corre antes de toda acción y aplica CatalogoOperaciones.
+builder.Services.AddControllers(opciones => opciones.Filters.Add<FiltroAutorizacionOperaciones>())
     .ConfigureApiBehaviorOptions(opciones =>
         opciones.InvalidModelStateResponseFactory = RespuestaSolicitudInvalida.Crear);
 
@@ -31,7 +32,8 @@ builder.Services.AddScoped<ServicioReenvioActivacion>();
 builder.Services.AddScoped<ServicioSesion>();
 builder.Services.AddScoped<ServicioAdministradorInicial>();
 
-// Esquema de autenticación por defecto (RF-CA-07): todo [Authorize] usa la credencial de sesión.
+// Esquema de autenticación por defecto (RF-CA-07): valida la credencial de sesión; lo usa
+// FiltroAutorizacionOperaciones para las operaciones que exigen sesión o rol.
 builder.Services.AddAuthentication(ManejadorAutenticacionSesion.Esquema)
     .AddScheme<AuthenticationSchemeOptions, ManejadorAutenticacionSesion>(ManejadorAutenticacionSesion.Esquema, null);
 builder.Services.AddAuthorization();
