@@ -161,6 +161,74 @@
 #   En todos los rechazos: respuesta controlada, sin traza, y no se crea ni cambia nada.
 
 ### ------------------------------------------------------------
+### RF-CA-01 — Registro de usuario: POST /api/auth/registro
+### ------------------------------------------------------------
+# Iniciar la API con "dotnet run" (base migrada). Ejecutar los casos en orden.
+
+### 1. Registro válido (el correo llega con mayúsculas y espacios)
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Ana Pérez", "correo": "  Ana.Perez@Example.COM ", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 201
+#             {"mensaje":"La cuenta se registró correctamente.","id":<n>,"nombre":"Ana Pérez",
+#              "correo":"ana.perez@example.com"}
+#             La respuesta NO incluye hashContrasena ni la contraseña.
+#   En DB Browser (tabla Usuarios): Correo = "ana.perez@example.com", Activo = 0,
+#             HashContrasena = "PBKDF2-SHA256$600000$...$...", FechaCreacion en UTC.
+
+### 2. Correo duplicado (mismo correo con otras mayúsculas: se compara normalizado)
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Otra Ana", "correo": "ANA.PEREZ@example.com", "contrasena": "OtraClave99"}
+
+#   Esperado: HTTP 409
+#             {"mensaje":"Ya existe una cuenta registrada con ese correo."}
+#             En Usuarios sigue habiendo una sola fila con ese correo.
+
+### 3. Correo vacío
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Beto", "correo": "", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo es obligatorio."}
+#   Igual con "   " o sin el campo "correo". No se crea ninguna fila.
+
+### 4. Correo mal formado
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Beto", "correo": "beto@localhost", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo no tiene un formato válido."}
+#   Igual con "beto", "beto@" o "Beto <beto@example.com>". No se crea ninguna fila.
+
+### 5. Contraseña de 5 caracteres
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Beto", "correo": "beto@example.com", "contrasena": "abc12"}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña debe tener al menos 8 caracteres."}
+#   No se crea ninguna fila.
+
+### 6. Contraseña sin números
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Beto", "correo": "beto@example.com", "contrasena": "abcdefgh"}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña debe incluir al menos un número."}
+#   No se crea ninguna fila.
+
+#   Carrera (revisión de código): si dos registros con el mismo correo pasan la comprobación
+#   a la vez, el índice único IX_Usuarios_Correo rechaza el segundo; ServicioRegistro atrapa
+#   esa violación y responde el mismo 409, sin error 500 ni traza.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

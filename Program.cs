@@ -19,6 +19,8 @@ builder.Services.AddSingleton<IHasherContrasenas, HasherContrasenasPbkdf2>();
 builder.Services.AddDbContext<ContextoDatos>(opciones =>
 opciones.UseSqlite("Data Source=trackingtiger.db"));
 
+builder.Services.AddScoped<ServicioRegistro>();
+
 builder.Services.AddScoped<IColaCorreo, ColaCorreo>();
 builder.Services.AddSingleton<IEnviadorCorreo, EnviadorSmtp>();
 builder.Services.AddScoped<ProcesadorColaCorreo>();
