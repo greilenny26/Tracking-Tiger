@@ -98,6 +98,283 @@
 #             y el resto del lote se envía igual.
 
 ### ------------------------------------------------------------
+### RF-CA-01 — Tabla Usuarios con correo único (base de datos, no HTTP)
+### ------------------------------------------------------------
+# Todavía no hay endpoint de registro. Se verifica en DB Browser sobre trackingtiger.db,
+# después de ".\skills.cmd db-migrate CrearUsuario" (o "dotnet ef database update"):
+#
+#   Esperado: existe la tabla Usuarios con Id, Nombre, Correo, HashContrasena, Activo,
+#             FechaCreacion, y el índice IX_Usuarios_Correo marcado como UNIQUE.
+#             No hay columna de rol.
+#
+#   En la pestaña "Ejecutar SQL":
+#   INSERT INTO Usuarios (Nombre, Correo, HashContrasena, Activo, FechaCreacion)
+#   VALUES ('Ana', 'ana@example.com', 'x', 0, '2026-10-04 00:00:00');
+#   (repetir el mismo INSERT)
+#   Esperado: el segundo falla con "UNIQUE constraint failed: Usuarios.Correo".
+#   Borrar la fila de prueba al terminar.
+#
+#   La normalización (sin espacios y en minúsculas) la hace la entidad al asignar Correo:
+#   " Ana@Example.COM " se guarda como "ana@example.com". Se comprueba de punta a punta
+#   cuando exista el registro.
+
+### ------------------------------------------------------------
+### RF-CA-02 — Contraseña guardada con hash y sal (servicio, sin endpoint todavía)
+### ------------------------------------------------------------
+# Servicio: Core/ControlAcceso/HasherContrasenasPbkdf2.cs (PBKDF2-HMAC-SHA256, 600 000
+# iteraciones, sal aleatoria de 16 bytes por contraseña, hash de 32 bytes).
+# Se prueba de punta a punta cuando exista el registro; entonces, en DB Browser:
+#
+#   Esperado: Usuarios.HashContrasena tiene la forma
+#             PBKDF2-SHA256$600000$<sal base64>$<hash base64>
+#             y no contiene la contraseña escrita.
+#   Registrar dos usuarios con la MISMA contraseña:
+#   Esperado: sus HashContrasena son distintos (sal distinta).
+#   Iniciar sesión con la contraseña correcta funciona; con una incorrecta, no.
+
+### ------------------------------------------------------------
+### RD-07 — Validación del formato del correo (validador, sin endpoint todavía)
+### ------------------------------------------------------------
+# Validador: Core/ControlAcceso/ValidadorCorreo.cs. Nunca lanza; devuelve ResultadoValidacion.
+# Se prueba de punta a punta con el registro, enviando estos valores en "correo":
+#
+#   null, "" o "   "                      → "El correo es obligatorio."
+#   más de 254 caracteres (tras quitar espacios) → "El correo no puede tener más de 254 caracteres."
+#   "ana", "ana@", "@example.com", "ana@@example.com", "Ana <ana@example.com>",
+#   "ana@localhost" (dominio sin punto), "ana@example.com." → "El correo no tiene un formato válido."
+#   "  Ana@Example.COM  "                 → aceptado (se guarda como "ana@example.com")
+#   En todos los rechazos: respuesta controlada, sin traza ni excepción, y no se crea el usuario.
+
+### ------------------------------------------------------------
+### RF-CA-14 — Política mínima de contraseña (validador, sin endpoint todavía)
+### ------------------------------------------------------------
+# Validador: Core/ControlAcceso/PoliticaContrasena.cs. Nunca lanza; devuelve ResultadoValidacion.
+# Se prueba de punta a punta con el registro (y luego con la recuperación y el cambio de
+# contraseña), enviando estos valores en "contrasena":
+#
+#   null o ""        → "La contraseña es obligatoria."
+#   "abc123"         → "La contraseña debe tener al menos 8 caracteres."
+#   "12345678"       → "La contraseña debe incluir al menos una letra."
+#   "abcdefgh"       → "La contraseña debe incluir al menos un número."
+#   "Clave1234"      → aceptada
+#   "contraseña1"    → aceptada (la ñ y las vocales con tilde cuentan como letras)
+#   En todos los rechazos: respuesta controlada, sin traza, y no se crea ni cambia nada.
+
+### ------------------------------------------------------------
+### RF-CA-01 — Registro de usuario: POST /api/auth/registro
+### ------------------------------------------------------------
+# Iniciar la API con "dotnet run" (base migrada). Ejecutar los casos en orden.
+
+### 1. Registro válido (el correo llega con mayúsculas y espacios)
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Maria Pérez", "correo": "alexabello383@gmail.com ", "contrasena": "Clave4321"}
+
+#   Esperado: HTTP 201
+#             {"mensaje":"La cuenta se creó, pero todavía no está activa. Te enviaremos un correo
+#              con el enlace para activarla.","id":<n>,"nombre":"Ana Pérez",
+#              "correo":"ana.perez@example.com","activo":false}
+#             La respuesta NO incluye hashContrasena ni la contraseña.
+#   En DB Browser (tabla Usuarios): Correo = "ana.perez@example.com", Activo = 0,
+#             HashContrasena = "PBKDF2-SHA256$600000$...$...", FechaCreacion en UTC.
+
+### 2. Correo duplicado (mismo correo con otras mayúsculas: se compara normalizado)
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Otra Ana", "correo": "ANA.PEREZ@example.com", "contrasena": "OtraClave99"}
+
+#   Esperado: HTTP 409
+#             {"mensaje":"Ya existe una cuenta registrada con ese correo."}
+#             En Usuarios sigue habiendo una sola fila con ese correo.
+
+### 3. Correo vacío
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Beto", "correo": "", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo es obligatorio."}
+#   Igual con "   " o sin el campo "correo". No se crea ninguna fila.
+
+### 4. Correo mal formado
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Beto", "correo": "beto@localhost", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo no tiene un formato válido."}
+#   Igual con "beto", "beto@" o "Beto <beto@example.com>". No se crea ninguna fila.
+
+### 5. Contraseña de 5 caracteres
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Beto", "correo": "beto@example.com", "contrasena": "abc12"}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña debe tener al menos 8 caracteres."}
+#   No se crea ninguna fila.
+
+### 6. Contraseña sin números
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Beto", "correo": "beto@example.com", "contrasena": "abcdefgh"}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña debe incluir al menos un número."}
+#   No se crea ninguna fila.
+
+#   Carrera (revisión de código): si dos registros con el mismo correo pasan la comprobación
+#   a la vez, el índice único IX_Usuarios_Correo rechaza el segundo; ServicioRegistro atrapa
+#   esa violación y responde el mismo 409, sin error 500 ni traza.
+
+### ------------------------------------------------------------
+### RF-CA-15 — Token de activación guardado con el registro (sin envío todavía)
+### ------------------------------------------------------------
+# Después del caso 1 de RF-CA-01 (registro válido), en DB Browser:
+#
+#   Esperado en TokensActivacion: una fila con UsuarioId = Id del usuario nuevo,
+#             TokenHash de 64 caracteres hexadecimales en minúsculas (SHA-256),
+#             Usado = 0, FechaEmision = FechaCreacion del usuario (UTC) y
+#             FechaVencimiento = FechaEmision + 24 horas.
+#   El token en claro (43 caracteres Base64Url) NO aparece en la base, ni en la respuesta
+#   HTTP, ni en la consola del servidor.
+#   Registros rechazados (casos 2 a 6): no se crea ninguna fila en Usuarios ni en TokensActivacion.
+#   Mismo SaveChanges: si falla el guardado, no queda un usuario sin token ni un token sin usuario.
+
+### ------------------------------------------------------------
+### RF-CA-15 — Correo de activación en la cola, sin contactar SMTP
+### ------------------------------------------------------------
+# Requisito: APP_URL_BASE definida en la terminal donde corre la API (ver .env.example).
+#
+#   1) Con SMTP caído o sin configurar: en una terminal con APP_URL_BASE pero con
+#      "set SMTP_HOST=localhost" y "set SMTP_PORT=2599" (o sin variables SMTP), ejecutar
+#      "dotnet run" y repetir el caso 1 de RF-CA-01 con otro correo.
+#   Esperado: HTTP 201 de inmediato (el registro no intenta conectarse a SMTP).
+#             En CorreosEnCola aparece una fila nueva: Destinatario = correo normalizado,
+#             Asunto = "Activa tu cuenta de Tracking Tiger", Estado = Pendiente, Intentos = 0.
+#             El Cuerpo incluye <APP_URL_BASE>/api/auth/activar?token=<43 caracteres>.
+#             Usuario, token y correo se crearon en la misma transacción (los tres o ninguno).
+#   El token en claro NO aparece en la respuesta HTTP ni en la consola del servidor.
+#   SHA-256 del token del enlace = TokenHash de la fila en TokensActivacion.
+#
+#   2) Sin APP_URL_BASE (terminal nueva sin la variable):
+#   Esperado: HTTP 503 {"mensaje":"El registro no está disponible en este momento. Intenta de nuevo más tarde."}
+#             La consola del servidor registra "Falta configurar la variable de entorno APP_URL_BASE ...".
+#             No se crea ninguna fila en Usuarios, TokensActivacion ni CorreosEnCola.
+#
+#   3) Registros rechazados (casos 2 a 6 de RF-CA-01): no se encola ningún correo.
+#
+#   4) Envío posterior con el proceso aparte (call .env.cmd; dotnet run -- enviar-correos):
+#   Esperado: el correo llega con el enlace y la fila pasa a Enviado.
+
+### ------------------------------------------------------------
+### RF-CA-16 — Activar la cuenta con el enlace: GET /api/auth/activar?token=...
+### ------------------------------------------------------------
+# Todo rechazo responde HTTP 400 y no cambia ninguna fila.
+
+### 1. Enlace válido: copiar el token del enlace del correo (o del Cuerpo en CorreosEnCola)
+GET http://localhost:5000/api/auth/activar?token=<token-del-correo>
+
+#   Esperado: HTTP 200 {"mensaje":"Tu cuenta se activó correctamente. Ya puedes iniciar sesión."}
+#   En DB Browser, en la misma transacción: Usuarios.Activo = 1 y TokensActivacion.Usado = 1.
+#   La consola del servidor NO muestra el token (ni la URL con ?token=...).
+
+### 2. Token inexistente
+GET http://localhost:5000/api/auth/activar?token=tokenQueNoExiste123
+
+#   Esperado: HTTP 400 {"mensaje":"El enlace de activación no es válido."}
+#   No cambia ninguna fila.
+
+### 3. Sin token
+GET http://localhost:5000/api/auth/activar
+
+#   Esperado: HTTP 400 {"mensaje":"El enlace de activación no es válido."}
+
+### 4. Enlace ya usado: repetir el caso 1 con el MISMO token
+GET http://localhost:5000/api/auth/activar?token=<token-ya-usado-en-el-caso-1>
+
+#   Esperado: HTTP 400 {"mensaje":"Este enlace de activación ya fue usado."}
+#   En DB Browser no cambia nada: Usuarios.Activo y TokensActivacion.Usado siguen en 1.
+
+### 5. Enlace vencido
+#   Registrar un usuario nuevo y, en DB Browser, adelantar el vencimiento de su token sin usar:
+#     UPDATE TokensActivacion SET FechaVencimiento = '2020-01-01 00:00:00'
+#     WHERE UsuarioId = <id-del-usuario-nuevo>;
+#   ("Escribir cambios" para guardar). Luego abrir su enlace:
+GET http://localhost:5000/api/auth/activar?token=<token-del-usuario-nuevo>
+
+#   Esperado: HTTP 400 {"mensaje":"El enlace de activación ya venció."}
+#   En DB Browser no cambia nada: Usuarios.Activo = 0 y TokensActivacion.Usado = 0.
+#   El vencimiento se compara con IReloj.AhoraUtc (UTC), no con la hora local.
+
+### ------------------------------------------------------------
+### RF-CA-17 — Reenviar el enlace de activación: POST /api/auth/reenviar-activacion
+### ------------------------------------------------------------
+# Requisito: APP_URL_BASE definida (igual que en el registro).
+# Los casos 1, 2 y 3 deben responder EXACTAMENTE igual (mismo código y mismo JSON):
+#   HTTP 200 {"mensaje":"Si el correo está registrado y la cuenta no está activa, recibirás un nuevo enlace."}
+# Solo cambia lo que pasa en la base de datos.
+
+### 1. Usuario existente y todavía inactivo (registrar uno y NO activarlo)
+POST http://localhost:5000/api/auth/reenviar-activacion
+Content-Type: application/json
+
+{"correo": "<correo-de-un-usuario-inactivo>"}
+
+#   Esperado: HTTP 200 con el mensaje uniforme.
+#   En DB Browser: una fila NUEVA en TokensActivacion para ese usuario (Usado = 0,
+#             FechaVencimiento = FechaEmision + 24 h) y una fila NUEVA en CorreosEnCola
+#             (Pendiente) con el enlace nuevo. Token y correo se guardan en la misma transacción.
+#   No contacta a SMTP. El token en claro no aparece en la respuesta ni en la consola.
+
+### 2. Correo no registrado
+POST http://localhost:5000/api/auth/reenviar-activacion
+Content-Type: application/json
+
+{"correo": "nadie@example.com"}
+
+#   Esperado: HTTP 200 con el MISMO mensaje uniforme del caso 1.
+#   No se crea ninguna fila en TokensActivacion ni en CorreosEnCola.
+
+### 3. Cuenta ya activa
+POST http://localhost:5000/api/auth/reenviar-activacion
+Content-Type: application/json
+
+{"correo": "<correo-de-un-usuario-ya-activado>"}
+
+#   Esperado: HTTP 200 con el MISMO mensaje uniforme del caso 1.
+#   No se crea ninguna fila en TokensActivacion ni en CorreosEnCola.
+
+### 4. Correo con formato inválido (se valida primero; no revela qué correos existen)
+POST http://localhost:5000/api/auth/reenviar-activacion
+Content-Type: application/json
+
+{"correo": "no-es-un-correo"}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo no tiene un formato válido."}
+#   Igual con "" → "El correo es obligatorio.". No se crea ninguna fila.
+
+### 5. El reenvío invalida los enlaces anteriores
+#   a) Registrar un usuario y NO activarlo. Guardar su enlace (enlace A, en CorreosEnCola).
+#   b) Pedir el reenvío con el caso 1 para ese correo → llega el enlace B (fila nueva en CorreosEnCola).
+#   Esperado en DB Browser (TokensActivacion, mismo UsuarioId), guardado en la misma transacción
+#   que el token nuevo y su correo:
+#             token de A: Usado = 0, Invalidado = 1
+#             token de B: Usado = 0, Invalidado = 0
+#   c) Abrir el enlace A:
+GET http://localhost:5000/api/auth/activar?token=<token-del-enlace-A>
+
+#   Esperado: HTTP 400 {"mensaje":"El enlace de activación no es válido."}
+#             Usuarios.Activo sigue en 0; no cambia ninguna fila.
+#   d) Abrir el enlace B:
+GET http://localhost:5000/api/auth/activar?token=<token-del-enlace-B>
+
+#   Esperado: HTTP 200, la cuenta se activa (Activo = 1, token de B con Usado = 1).
+#   Los tokens ya usados no se tocan al reenviar (solo se invalidan los que no se usaron).
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

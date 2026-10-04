@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Tracking_Tiger.Core.Persistencia;
 
@@ -10,48 +11,14 @@ using Tracking_Tiger.Core.Persistencia;
 namespace Tracking_Tiger.Migrations
 {
     [DbContext(typeof(ContextoDatos))]
-    partial class ContextoDatosModelSnapshot : ModelSnapshot
+    [Migration("20261004104928_CrearUsuario")]
+    partial class CrearUsuario
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
-
-            modelBuilder.Entity("Tracking_Tiger.Core.ControlAcceso.TokenActivacion", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("FechaEmision")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("FechaVencimiento")
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("Invalidado")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("TokenHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("Usado")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("UsuarioId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TokenHash")
-                        .IsUnique();
-
-                    b.HasIndex("UsuarioId");
-
-                    b.ToTable("TokensActivacion", (string)null);
-                });
 
             modelBuilder.Entity("Tracking_Tiger.Core.ControlAcceso.Usuario", b =>
                 {
@@ -130,17 +97,6 @@ namespace Tracking_Tiger.Migrations
                     b.HasIndex("Estado");
 
                     b.ToTable("CorreosEnCola", (string)null);
-                });
-
-            modelBuilder.Entity("Tracking_Tiger.Core.ControlAcceso.TokenActivacion", b =>
-                {
-                    b.HasOne("Tracking_Tiger.Core.ControlAcceso.Usuario", "Usuario")
-                        .WithMany()
-                        .HasForeignKey("UsuarioId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Usuario");
                 });
 #pragma warning restore 612, 618
         }

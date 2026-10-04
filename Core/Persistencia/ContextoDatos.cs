@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
 
 namespace Tracking_Tiger.Core.Persistencia;
@@ -12,6 +13,8 @@ public class ContextoDatos : DbContext
     }
 
     public DbSet<CorreoEnCola> CorreosEnCola => Set<CorreoEnCola>();
+    public DbSet<Usuario> Usuarios => Set<Usuario>();
+    public DbSet<TokenActivacion> TokensActivacion => Set<TokenActivacion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -27,6 +30,36 @@ public class ContextoDatos : DbContext
             correo.Property(c => c.FechaCreacion).IsRequired();
             correo.Property(c => c.UltimoError).HasMaxLength(1000);
             correo.HasIndex(c => c.Estado);
+        });
+
+        modelBuilder.Entity<Usuario>(usuario =>
+        {
+            usuario.ToTable("Usuarios");
+            usuario.HasKey(u => u.Id);
+            usuario.Property(u => u.Nombre).IsRequired().HasMaxLength(100);
+            usuario.Property(u => u.Correo).IsRequired().HasMaxLength(320);
+            usuario.Property(u => u.HashContrasena).IsRequired();
+            usuario.Property(u => u.Activo).IsRequired();
+            usuario.Property(u => u.FechaCreacion).IsRequired();
+            // RF-CA-01: la base rechaza un segundo usuario con el mismo correo.
+            usuario.HasIndex(u => u.Correo).IsUnique();
+        });
+
+        modelBuilder.Entity<TokenActivacion>(token =>
+        {
+            token.ToTable("TokensActivacion");
+            token.HasKey(t => t.Id);
+            token.Property(t => t.TokenHash).IsRequired().HasMaxLength(64);
+            token.Property(t => t.FechaEmision).IsRequired();
+            token.Property(t => t.FechaVencimiento).IsRequired();
+            token.Property(t => t.Usado).IsRequired();
+            token.Property(t => t.Invalidado).IsRequired();
+            // La activación busca el token por su hash.
+            token.HasIndex(t => t.TokenHash).IsUnique();
+            token.HasOne(t => t.Usuario)
+                .WithMany()
+                .HasForeignKey(t => t.UsuarioId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -1,10 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.Comun;
+using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
 using Tracking_Tiger.Core.Persistencia;
 using Tracking_Tiger.Core.Web;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// El registro de peticiones de ASP.NET Core escribe la URL completa, con su query string, en nivel
+// Information. GET /api/auth/activar?token=... dejaría el token en claro en la consola del servidor.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(opciones =>
@@ -13,9 +18,15 @@ builder.Services.AddControllers()
 builder.Services.AddExceptionHandler<ManejadorErroresGlobal>();
 
 builder.Services.AddSingleton<IReloj, RelojSistema>();
+builder.Services.AddSingleton<IHasherContrasenas, HasherContrasenasPbkdf2>();
 
 builder.Services.AddDbContext<ContextoDatos>(opciones =>
 opciones.UseSqlite("Data Source=trackingtiger.db"));
+
+builder.Services.AddScoped<EmisorActivacion>();
+builder.Services.AddScoped<ServicioRegistro>();
+builder.Services.AddScoped<ServicioActivacion>();
+builder.Services.AddScoped<ServicioReenvioActivacion>();
 
 builder.Services.AddScoped<IColaCorreo, ColaCorreo>();
 builder.Services.AddSingleton<IEnviadorCorreo, EnviadorSmtp>();

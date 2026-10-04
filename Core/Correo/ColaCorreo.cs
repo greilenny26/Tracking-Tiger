@@ -4,6 +4,7 @@ using Tracking_Tiger.Core.Persistencia;
 namespace Tracking_Tiger.Core.Correo;
 
 // Registra correos en CorreoEnCola con estado Pendiente (RF-NOT-08).
+// EncolarAsync guarda de inmediato; Agregar deja el correo en la transacción de quien llama.
 // No envía nada: la operación que origina el correo termina bien aunque el servidor SMTP no responda.
 public sealed class ColaCorreo : IColaCorreo
 {
@@ -22,20 +23,44 @@ public sealed class ColaCorreo : IColaCorreo
 
     public async Task<ResultadoEncolar> EncolarAsync(string destinatario, string asunto, string cuerpo)
     {
+        var (correo, rechazo) = Crear(destinatario, asunto, cuerpo);
+        if (correo is null)
+            return rechazo!;
+
+        _contexto.CorreosEnCola.Add(correo);
+        await _contexto.SaveChangesAsync();
+
+        return ResultadoEncolar.Aceptado(correo.Id);
+    }
+
+    public ResultadoEncolar Agregar(string destinatario, string asunto, string cuerpo)
+    {
+        var (correo, rechazo) = Crear(destinatario, asunto, cuerpo);
+        if (correo is null)
+            return rechazo!;
+
+        _contexto.CorreosEnCola.Add(correo);
+
+        // El Id se asigna cuando quien llama ejecuta SaveChanges.
+        return ResultadoEncolar.Agregado();
+    }
+
+    private (CorreoEnCola? Correo, ResultadoEncolar? Rechazo) Crear(string destinatario, string asunto, string cuerpo)
+    {
         if (string.IsNullOrWhiteSpace(destinatario))
-            return ResultadoEncolar.Rechazado("El destinatario es obligatorio.");
+            return (null, ResultadoEncolar.Rechazado("El destinatario es obligatorio."));
         if (string.IsNullOrWhiteSpace(asunto))
-            return ResultadoEncolar.Rechazado("El asunto es obligatorio.");
+            return (null, ResultadoEncolar.Rechazado("El asunto es obligatorio."));
         if (string.IsNullOrWhiteSpace(cuerpo))
-            return ResultadoEncolar.Rechazado("El cuerpo es obligatorio.");
+            return (null, ResultadoEncolar.Rechazado("El cuerpo es obligatorio."));
 
         destinatario = destinatario.Trim();
         asunto = asunto.Trim();
 
         if (destinatario.Length > LargoMaximoDestinatario)
-            return ResultadoEncolar.Rechazado("El destinatario es demasiado largo.");
+            return (null, ResultadoEncolar.Rechazado("El destinatario es demasiado largo."));
         if (asunto.Length > LargoMaximoAsunto)
-            return ResultadoEncolar.Rechazado("El asunto es demasiado largo.");
+            return (null, ResultadoEncolar.Rechazado("El asunto es demasiado largo."));
 
         var correo = new CorreoEnCola
         {
@@ -47,9 +72,6 @@ public sealed class ColaCorreo : IColaCorreo
             FechaCreacion = _reloj.AhoraUtc
         };
 
-        _contexto.CorreosEnCola.Add(correo);
-        await _contexto.SaveChangesAsync();
-
-        return ResultadoEncolar.Aceptado(correo.Id);
+        return (correo, null);
     }
 }
