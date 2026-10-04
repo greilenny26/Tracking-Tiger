@@ -500,6 +500,7 @@ Content-Type: application/json
 ### RF-CA-07 — Usuario autenticado: GET /api/auth/yo
 ### ------------------------------------------------------------
 # Antes: iniciar sesión con un usuario activo (caso 1 de RF-CA-03) y copiar el "token" de la respuesta.
+# Todo caso de sesión no válida responde exactamente HTTP 401 {"mensaje":"Sesión no válida o vencida."}.
 
 ### 1. Credencial válida
 GET http://localhost:5000/api/auth/yo
@@ -533,6 +534,18 @@ Authorization: Bearer
 #   En DB Browser: UPDATE SesionesUsuario SET Revocada = 1 WHERE Id = <id-de-la-sesión>;
 #   ("Escribir cambios"). Luego repetir el caso 1 con el mismo token.
 #   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 6. Sesión vencida
+#   En DB Browser: UPDATE SesionesUsuario SET FechaVencimiento = '2020-01-01 00:00:00' WHERE Id = <id>;
+#   ("Escribir cambios"). Luego repetir el caso 1 con ese token.
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+#   El vencimiento se compara con IReloj.AhoraUtc (UTC), no con la hora local.
+
+### 7. Usuario que ya no está activo
+#   Iniciar sesión de nuevo (token nuevo). En DB Browser: UPDATE Usuarios SET Activo = 0 WHERE Id = <id>;
+#   Luego repetir el caso 1 con ese token.
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."} — el mismo mensaje que en los demás casos.
+#   Volver a poner Activo = 1 al terminar.
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API

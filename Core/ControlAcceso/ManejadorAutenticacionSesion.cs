@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.Persistencia;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
@@ -11,6 +12,8 @@ namespace Tracking_Tiger.Core.ControlAcceso;
 // Único punto que valida sesiones; todo endpoint con [Authorize] lo reutiliza por ser el esquema por defecto.
 // Se busca la sesión por el SHA-256 del token (en la base nunca está el token en claro).
 // Con una entrada mal formada nunca lanza: responde "sin autenticar" y el cliente recibe 401.
+// Sesión no válida (siempre el mismo 401 con el mismo mensaje): sin encabezado, encabezado mal formado,
+// token desconocido, sesión revocada, sesión vencida (reloj UTC, RD-11) o usuario que ya no está activo.
 public sealed class ManejadorAutenticacionSesion : AuthenticationHandler<AuthenticationSchemeOptions>
 {
     public const string Esquema = "SesionBearer";
@@ -21,12 +24,14 @@ public sealed class ManejadorAutenticacionSesion : AuthenticationHandler<Authent
     private const int LargoMaximoToken = 128;
 
     private readonly ContextoDatos _contexto;
+    private readonly IReloj _reloj;
 
     public ManejadorAutenticacionSesion(IOptionsMonitor<AuthenticationSchemeOptions> opciones,
-        ILoggerFactory registro, UrlEncoder codificador, ContextoDatos contexto)
+        ILoggerFactory registro, UrlEncoder codificador, ContextoDatos contexto, IReloj reloj)
         : base(opciones, registro, codificador)
     {
         _contexto = contexto;
+        _reloj = reloj;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -44,9 +49,15 @@ public sealed class ManejadorAutenticacionSesion : AuthenticationHandler<Authent
         var tokenHash = GeneradorTokens.CalcularHash(token);
         var sesion = await _contexto.SesionesUsuario
             .AsNoTracking()
-            .SingleOrDefaultAsync(s => s.TokenHash == tokenHash);
+            .Where(s => s.TokenHash == tokenHash)
+            .Select(s => new { s.Id, s.UsuarioId, s.Revocada, s.FechaVencimiento, UsuarioActivo = s.Usuario.Activo })
+            .SingleOrDefaultAsync();
 
-        if (sesion is null || sesion.Revocada)
+        // Todas las causas terminan en el mismo Fail: el cliente no puede distinguir cuál fue.
+        if (sesion is null
+            || sesion.Revocada
+            || sesion.FechaVencimiento < _reloj.AhoraUtc
+            || !sesion.UsuarioActivo)
             return AuthenticateResult.Fail("Sesión no válida.");
 
         var identidad = new ClaimsIdentity(
