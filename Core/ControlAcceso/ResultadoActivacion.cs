@@ -3,7 +3,8 @@ namespace Tracking_Tiger.Core.ControlAcceso;
 public enum EstadoActivacion
 {
     Activada,
-    EnlaceInvalido
+    EnlaceInvalido,
+    EnlaceUsado
 }
 
 // Resultado de abrir el enlace de activación (RF-CA-16). El rechazo usa un mensaje genérico:
@@ -15,4 +16,7 @@ public sealed record ResultadoActivacion(EstadoActivacion Estado, string Mensaje
 
     public static ResultadoActivacion EnlaceInvalido() =>
         new(EstadoActivacion.EnlaceInvalido, "El enlace de activación no es válido.");
+
+    public static ResultadoActivacion EnlaceUsado() =>
+        new(EstadoActivacion.EnlaceUsado, "Este enlace de activación ya fue usado.");
 }

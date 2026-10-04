@@ -272,7 +272,7 @@ Content-Type: application/json
 ### ------------------------------------------------------------
 ### RF-CA-16 — Activar la cuenta con el enlace: GET /api/auth/activar?token=...
 ### ------------------------------------------------------------
-# Solo el camino feliz. Token usado y token vencido llegan en pasos aparte.
+# Todo rechazo responde HTTP 400 y no cambia ninguna fila.
 
 ### 1. Enlace válido: copiar el token del enlace del correo (o del Cuerpo en CorreosEnCola)
 GET http://localhost:5000/api/auth/activar?token=a3qNPG-2TpbA9sVqm9xK_zX9iyP_sc3R9NNnzGuNgUY
@@ -291,6 +291,12 @@ GET http://localhost:5000/api/auth/activar?token=tokenQueNoExiste123
 GET http://localhost:5000/api/auth/activar
 
 #   Esperado: HTTP 400 {"mensaje":"El enlace de activación no es válido."}
+
+### 4. Enlace ya usado: repetir el caso 1 con el MISMO token
+GET http://localhost:5000/api/auth/activar?token=<token-ya-usado-en-el-caso-1>
+
+#   Esperado: HTTP 400 {"mensaje":"Este enlace de activación ya fue usado."}
+#   En DB Browser no cambia nada: Usuarios.Activo y TokensActivacion.Usado siguen en 1.
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
