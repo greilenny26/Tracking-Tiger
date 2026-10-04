@@ -111,3 +111,46 @@ Actualización del archivo docs/pruebas.http para eliminar tokens reales expuest
 - `985a20f` Rechaza el enlace de activacion vencido
 
 - `e7a2836` Rechaza el enlace de activacion vencido
+
+## Sesión 7: Migraciones automáticas al iniciar (RD-09)
+- **Qué le pedí:** Que la aplicación aplique todas las migraciones pendientes de EF Core al iniciar, en un solo paso compartido por el servidor web y por los comandos `encolar-prueba` y `enviar-correos`, para que un clon nuevo sin archivo de base de datos funcione.
+
+- **Qué devolvió:**
+  - En `Program.cs`, un único bloque justo después de `builder.Build()` que ejecuta `ContextoDatos.Database.Migrate()` antes de cualquier punto de entrada; si la base ya está al día no hace nada.
+  - Si la migración falla, muestra un mensaje en español sin trazas (RD-08) y termina con código 1.
+  - Caso RD-09 en `docs/pruebas.http`.
+  - Verificación en carpetas vacías del scratchpad (sin tocar `trackingtiger.db`): `encolar-prueba`, `enviar-correos` y el servidor web crean la base migrada desde cero; `dotnet ef migrations list` sigue funcionando.
+
+- **Dónde se equivocó:** Al inicializar la base de datos de forma automática, el middleware intentó registrar las migraciones antes de que el contenedor de dependencias resolviera correctamente el contexto en los comandos de consola independientes.
+- **Cómo lo detecté:** Al ejecutar dotnet run -- encolar-prueba en un entorno limpio sin base de datos, lanzó una excepción de tipo InvalidOperationException por un ámbito de servicios no disponible al invocar Migrate() directamente desde el hilo principal sin un scope explícito.
+- **Cómo lo corregí:** Envolví la llamada a ContextoDatos.Database.Migrate() dentro de un bloque using (var scope = app.Services.CreateScope()) para asegurar la correcta resolución del contexto de base de datos antes de ejecutar los comandos o levantar el servidor HTTP.
+
+- **Commit(s):**
+  - `5229160` Aplica las migraciones pendientes al iniciar
+
+## Sesión 8: Sesión de usuario: inicio, consulta, cierre y bloqueo (RF-CA-03, 07, 15, 18 y 19)
+- **Qué le pedí:** Implementar en la rama `feat/sesion`, un commit a la vez, la entidad de sesión, el inicio de sesión con credencial opaca, la autenticación Bearer reutilizable, la consulta del usuario autenticado, el cierre de sesión y el bloqueo por intentos fallidos. Desde esta sesión, el agente muestra primero cada propuesta y solo la aplica tras mi aprobación.
+
+- **Qué devolvió:**
+  - `SesionUsuario` (hash SHA-256 del token, emisión, vencimiento de 8 h, revocada) con la migración `CrearSesionUsuario`.
+  - `POST /api/auth/login` en `ServicioSesion`: token de 32 bytes Base64Url que solo viaja en la respuesta; correo inexistente y contraseña incorrecta responden igual (401 "Credenciales inválidas.") y tardan lo mismo gracias a un hash ficticio; cuenta sin activar → 403 solo con la contraseña correcta.
+  - `ManejadorAutenticacionSesion`: esquema Bearer por defecto; cualquier sesión no válida (sin encabezado, mal formada, desconocida, revocada, vencida o de un usuario inactivo) recibe el mismo 401 "Sesión no válida o vencida.".
+  - `GET /api/auth/yo` (id, nombre, correo) y `POST /api/auth/logout` (revoca solo la sesión actual).
+  - `IntentosFallidos` y `BloqueadoHasta` en `Usuario` (migraciones `AgregarIntentosFallidos` y `AgregarBloqueadoHasta`): incremento atómico, bloqueo de 15 min al 5.º fallo consecutivo (429), reinicio al vencer el bloqueo y al iniciar sesión correctamente.
+  - Casos de cada commit en `docs/pruebas.http` y pruebas de humo en bases desechables del scratchpad (incluido un envío de 10 intentos en paralelo que no pierde ningún conteo).
+
+- **Dónde se equivocó:** Al implementar la igualación de tiempos de respuesta en el inicio de sesión fallido, el hashing ficticio (para simular el costo de verificación de contraseña con correo inexistente) no utilizaba los mismos parámetros de iteración que el hasher real de ASP.NET Core, lo que generaba una ligera discrepancia medible en los tests de timing en milisegundos.
+- **Cómo lo detecté:** Mediante un script automatizado de PowerShell en el scratchpad que medía el promedio de tiempo de respuesta de solicitudes concurrentes (Invoke-WebRequest) para credenciales inexistentes frente a contraseñas malas.
+- **Cómo lo corregí:** Reemplacé el hash ficticio por una llamada directa al servicio de contraseñas utilizando una cadena de prueba fija con el mismo algoritmo y parámetros de carga computacional (PasswordHasher), garantizando tiempos de respuesta idénticos y neutralizando ataques de temporización.
+
+- **Commit(s):**
+  - `f6a9d17` Agrega la entidad de sesion de usuario
+  - `12d48de` Agrega el inicio de sesion con credencial
+  - `34f5020` Iguala las respuestas de inicio de sesion fallido
+  - `585b4af` Rechaza el inicio de sesion de cuentas sin activar
+  - `5a97fa9` Agrega la consulta del usuario autenticado
+  - `cd4a3ca` Rechaza toda sesion no valida con el mismo mensaje
+  - `ed7bea7` Agrega el cierre de sesion
+  - `fd02717` Cuenta los intensos fallidos de inicio de sesion
+  - `30d181c` Bloquea la cuenta tras cinco intentos fallidos
+  - `9fef15e` Reinicia los intentos fallidos al iniciar sesion
