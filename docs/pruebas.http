@@ -133,6 +133,19 @@
 #   Iniciar sesión con la contraseña correcta funciona; con una incorrecta, no.
 
 ### ------------------------------------------------------------
+### RD-07 — Validación del formato del correo (validador, sin endpoint todavía)
+### ------------------------------------------------------------
+# Validador: Core/ControlAcceso/ValidadorCorreo.cs. Nunca lanza; devuelve ResultadoValidacion.
+# Se prueba de punta a punta con el registro, enviando estos valores en "correo":
+#
+#   null, "" o "   "                      → "El correo es obligatorio."
+#   más de 254 caracteres (tras quitar espacios) → "El correo no puede tener más de 254 caracteres."
+#   "ana", "ana@", "@example.com", "ana@@example.com", "Ana <ana@example.com>",
+#   "ana@localhost" (dominio sin punto), "ana@example.com." → "El correo no tiene un formato válido."
+#   "  Ana@Example.COM  "                 → aceptado (se guarda como "ana@example.com")
+#   En todos los rechazos: respuesta controlada, sin traza ni excepción, y no se crea el usuario.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
