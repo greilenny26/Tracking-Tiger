@@ -128,6 +128,11 @@ ipch/
 .m2/
 .nuget/
 
+# Base de datos local
+*.db
+*.db-shm
+*.db-wal
+*.sqlite*
 # Visual Studio profiler
 *.psess
 *.vsp
