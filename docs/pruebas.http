@@ -506,7 +506,7 @@ Content-Type: application/json
 GET http://localhost:5000/api/auth/yo
 Authorization: Bearer <token-del-login>
 
-#   Esperado: HTTP 200 {"id":<n>,"nombre":"...","correo":"..."}
+#   Esperado: HTTP 200 {"id":<n>,"nombre":"...","correo":"...","rol":"Estandar"}
 #             Los datos salen de la base. La respuesta NO incluye hash de contraseña ni tokens.
 
 ### 2. Sin encabezado Authorization
@@ -677,6 +677,36 @@ Content-Type: application/json
 #   Con un usuario sin activar: 2 fallos (IntentosFallidos = 2) y luego la contraseña correcta.
 #   Esperado: HTTP 403 "La cuenta no está activa..." e IntentosFallidos sigue en 2
 #             (no es un inicio de sesión correcto, no se reinicia).
+
+### ------------------------------------------------------------
+### RF-CA-04 — Rol del usuario
+### ------------------------------------------------------------
+# Roles declarados en un solo lugar: Core/ControlAcceso/Rol.cs (Administrador, Estandar).
+# En la base se guardan como texto en Usuarios.Rol.
+
+### 1. Registro normal
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Rol Normal", "correo": "rol.normal@example.com", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 201. En DB Browser: Usuarios.Rol = 'Estandar'.
+
+### 2. Registro que intenta elegir su rol
+POST http://localhost:5000/api/auth/registro
+Content-Type: application/json
+
+{"nombre": "Rol Colado", "correo": "rol.colado@example.com", "contrasena": "Clave1234", "rol": "Administrador"}
+
+#   Esperado: HTTP 201 igual que el caso 1; el campo "rol" se ignora.
+#   En DB Browser: Usuarios.Rol = 'Estandar' (nunca 'Administrador').
+
+### 3. Usuarios que ya existían antes de la migración AsignarRolUsuario
+#   Esperado en DB Browser: todos tienen Rol = 'Estandar'; ninguno vacío ni NULL.
+
+### 4. GET /api/auth/yo devuelve el rol
+#   Con el token de un usuario activo (caso 1 de RF-CA-07).
+#   Esperado: HTTP 200 {"id":<n>,"nombre":"...","correo":"...","rol":"Estandar"}
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API

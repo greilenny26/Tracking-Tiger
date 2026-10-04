@@ -104,7 +104,7 @@ public sealed class ControladorAutenticacion : ControllerBase
         var usuario = await _servicioSesion.ObtenerUsuarioActualAsync(usuarioId);
         return usuario is null
             ? Unauthorized(new { mensaje = "Sesión no válida o vencida." })
-            : Ok(new { id = usuario.Id, nombre = usuario.Nombre, correo = usuario.Correo });
+            : Ok(new { id = usuario.Id, nombre = usuario.Nombre, correo = usuario.Correo, rol = usuario.Rol.ToString() });
     }
 
     // RF-CA-18: cierra la sesión actual. Sin sesión válida, el esquema responde 401 antes de llegar aquí.

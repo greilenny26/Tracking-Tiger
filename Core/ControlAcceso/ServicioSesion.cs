@@ -128,6 +128,6 @@ public sealed class ServicioSesion
         await _contexto.Usuarios
             .AsNoTracking()
             .Where(u => u.Id == usuarioId)
-            .Select(u => new UsuarioActual(u.Id, u.Nombre, u.Correo))
+            .Select(u => new UsuarioActual(u.Id, u.Nombre, u.Correo, u.Rol))
             .SingleOrDefaultAsync();
 }

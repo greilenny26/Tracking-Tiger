@@ -19,6 +19,10 @@ public class Usuario
 
     public string HashContrasena { get; set; } = string.Empty;
 
+    // Rol del usuario (RF-CA-04): todo usuario tiene exactamente uno. Se guarda como texto.
+    // Valor seguro por defecto: Estandar (en el enum, el primer valor es Administrador).
+    public Rol Rol { get; private set; } = Rol.Estandar;
+
     // El usuario nace inactivo hasta abrir el enlace de activación (RF-CA-15).
     // Solo la propia entidad puede cambiarlo; desde fuera es de solo lectura.
     public bool Activo { get; private set; }
@@ -41,6 +45,7 @@ public class Usuario
     public void Activar() => Activo = true;
 
     // Regla de dominio (RF-CA-15): un usuario nuevo SIEMPRE nace inactivo.
+    // RF-CA-04: un usuario nuevo SIEMPRE nace Estándar; el rol nunca se toma de la petición.
     // El correo se normaliza al asignarlo; el hash ya debe venir calculado.
     public static Usuario CrearNuevo(string nombre, string correo, string hashContrasena, DateTime fechaCreacionUtc) =>
         new()
@@ -48,6 +53,7 @@ public class Usuario
             Nombre = nombre,
             Correo = correo,
             HashContrasena = hashContrasena,
+            Rol = Rol.Estandar,
             Activo = false,
             FechaCreacion = fechaCreacionUtc
         };
