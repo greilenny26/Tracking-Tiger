@@ -30,6 +30,9 @@ public class Usuario
     {
     }
 
+    // Activa la cuenta al abrir el enlace de activación (RF-CA-16).
+    public void Activar() => Activo = true;
+
     // Regla de dominio (RF-CA-15): un usuario nuevo SIEMPRE nace inactivo.
     // El correo se normaliza al asignarlo; el hash ya debe venir calculado.
     public static Usuario CrearNuevo(string nombre, string correo, string hashContrasena, DateTime fechaCreacionUtc) =>

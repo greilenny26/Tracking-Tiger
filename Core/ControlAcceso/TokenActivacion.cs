@@ -19,6 +19,9 @@ public class TokenActivacion
     {
     }
 
+    // Marca el token como consumido al activar la cuenta (RF-CA-16).
+    public void MarcarUsado() => Usado = true;
+
     // Se asocia por la navegación para guardarse en el mismo SaveChanges que un usuario nuevo,
     // cuando su Id todavía no existe.
     public static TokenActivacion Emitir(Usuario usuario, string tokenHash, DateTime ahoraUtc) =>

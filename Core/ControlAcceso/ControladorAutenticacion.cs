@@ -8,10 +8,12 @@ namespace Tracking_Tiger.Core.ControlAcceso;
 public sealed class ControladorAutenticacion : ControllerBase
 {
     private readonly ServicioRegistro _servicioRegistro;
+    private readonly ServicioActivacion _servicioActivacion;
 
-    public ControladorAutenticacion(ServicioRegistro servicioRegistro)
+    public ControladorAutenticacion(ServicioRegistro servicioRegistro, ServicioActivacion servicioActivacion)
     {
         _servicioRegistro = servicioRegistro;
+        _servicioActivacion = servicioActivacion;
     }
 
     // RF-CA-01: 201 con los datos públicos del usuario, 400 si los datos no son válidos,
@@ -36,5 +38,16 @@ public sealed class ControladorAutenticacion : ControllerBase
             EstadoRegistro.NoDisponible => StatusCode(StatusCodes.Status503ServiceUnavailable, new { mensaje = resultado.Mensaje }),
             _ => BadRequest(new { mensaje = resultado.Mensaje })
         };
+    }
+
+    // RF-CA-16: 200 si la cuenta se activó, 400 con mensaje genérico si el enlace no es válido.
+    [HttpGet("activar")]
+    public async Task<IActionResult> Activar([FromQuery] string? token)
+    {
+        var resultado = await _servicioActivacion.ActivarAsync(token);
+
+        return resultado.Estado == EstadoActivacion.Activada
+            ? Ok(new { mensaje = resultado.Mensaje })
+            : BadRequest(new { mensaje = resultado.Mensaje });
     }
 }

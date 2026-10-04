@@ -270,6 +270,29 @@ Content-Type: application/json
 #   Esperado: el correo llega con el enlace y la fila pasa a Enviado.
 
 ### ------------------------------------------------------------
+### RF-CA-16 — Activar la cuenta con el enlace: GET /api/auth/activar?token=...
+### ------------------------------------------------------------
+# Solo el camino feliz. Token usado y token vencido llegan en pasos aparte.
+
+### 1. Enlace válido: copiar el token del enlace del correo (o del Cuerpo en CorreosEnCola)
+GET http://localhost:5000/api/auth/activar?token=a3qNPG-2TpbA9sVqm9xK_zX9iyP_sc3R9NNnzGuNgUY
+
+#   Esperado: HTTP 200 {"mensaje":"Tu cuenta se activó correctamente. Ya puedes iniciar sesión."}
+#   En DB Browser, en la misma transacción: Usuarios.Activo = 1 y TokensActivacion.Usado = 1.
+#   La consola del servidor NO muestra el token (ni la URL con ?token=...).
+
+### 2. Token inexistente
+GET http://localhost:5000/api/auth/activar?token=tokenQueNoExiste123
+
+#   Esperado: HTTP 400 {"mensaje":"El enlace de activación no es válido."}
+#   No cambia ninguna fila.
+
+### 3. Sin token
+GET http://localhost:5000/api/auth/activar
+
+#   Esperado: HTTP 400 {"mensaje":"El enlace de activación no es válido."}
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
