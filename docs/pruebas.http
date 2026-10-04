@@ -275,7 +275,7 @@ Content-Type: application/json
 # Todo rechazo responde HTTP 400 y no cambia ninguna fila.
 
 ### 1. Enlace válido: copiar el token del enlace del correo (o del Cuerpo en CorreosEnCola)
-GET http://localhost:5000/api/auth/activar?token=a3qNPG-2TpbA9sVqm9xK_zX9iyP_sc3R9NNnzGuNgUY
+GET http://localhost:5000/api/auth/activar?token=<token-del-correo>
 
 #   Esperado: HTTP 200 {"mensaje":"Tu cuenta se activó correctamente. Ya puedes iniciar sesión."}
 #   En DB Browser, en la misma transacción: Usuarios.Activo = 1 y TokensActivacion.Usado = 1.
@@ -308,6 +308,71 @@ GET http://localhost:5000/api/auth/activar?token=<token-del-usuario-nuevo>
 #   Esperado: HTTP 400 {"mensaje":"El enlace de activación ya venció."}
 #   En DB Browser no cambia nada: Usuarios.Activo = 0 y TokensActivacion.Usado = 0.
 #   El vencimiento se compara con IReloj.AhoraUtc (UTC), no con la hora local.
+
+### ------------------------------------------------------------
+### RF-CA-17 — Reenviar el enlace de activación: POST /api/auth/reenviar-activacion
+### ------------------------------------------------------------
+# Requisito: APP_URL_BASE definida (igual que en el registro).
+# Los casos 1, 2 y 3 deben responder EXACTAMENTE igual (mismo código y mismo JSON):
+#   HTTP 200 {"mensaje":"Si el correo está registrado y la cuenta no está activa, recibirás un nuevo enlace."}
+# Solo cambia lo que pasa en la base de datos.
+
+### 1. Usuario existente y todavía inactivo (registrar uno y NO activarlo)
+POST http://localhost:5000/api/auth/reenviar-activacion
+Content-Type: application/json
+
+{"correo": "<correo-de-un-usuario-inactivo>"}
+
+#   Esperado: HTTP 200 con el mensaje uniforme.
+#   En DB Browser: una fila NUEVA en TokensActivacion para ese usuario (Usado = 0,
+#             FechaVencimiento = FechaEmision + 24 h) y una fila NUEVA en CorreosEnCola
+#             (Pendiente) con el enlace nuevo. Token y correo se guardan en la misma transacción.
+#   No contacta a SMTP. El token en claro no aparece en la respuesta ni en la consola.
+
+### 2. Correo no registrado
+POST http://localhost:5000/api/auth/reenviar-activacion
+Content-Type: application/json
+
+{"correo": "nadie@example.com"}
+
+#   Esperado: HTTP 200 con el MISMO mensaje uniforme del caso 1.
+#   No se crea ninguna fila en TokensActivacion ni en CorreosEnCola.
+
+### 3. Cuenta ya activa
+POST http://localhost:5000/api/auth/reenviar-activacion
+Content-Type: application/json
+
+{"correo": "<correo-de-un-usuario-ya-activado>"}
+
+#   Esperado: HTTP 200 con el MISMO mensaje uniforme del caso 1.
+#   No se crea ninguna fila en TokensActivacion ni en CorreosEnCola.
+
+### 4. Correo con formato inválido (se valida primero; no revela qué correos existen)
+POST http://localhost:5000/api/auth/reenviar-activacion
+Content-Type: application/json
+
+{"correo": "no-es-un-correo"}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo no tiene un formato válido."}
+#   Igual con "" → "El correo es obligatorio.". No se crea ninguna fila.
+
+### 5. El reenvío invalida los enlaces anteriores
+#   a) Registrar un usuario y NO activarlo. Guardar su enlace (enlace A, en CorreosEnCola).
+#   b) Pedir el reenvío con el caso 1 para ese correo → llega el enlace B (fila nueva en CorreosEnCola).
+#   Esperado en DB Browser (TokensActivacion, mismo UsuarioId), guardado en la misma transacción
+#   que el token nuevo y su correo:
+#             token de A: Usado = 0, Invalidado = 1
+#             token de B: Usado = 0, Invalidado = 0
+#   c) Abrir el enlace A:
+GET http://localhost:5000/api/auth/activar?token=<token-del-enlace-A>
+
+#   Esperado: HTTP 400 {"mensaje":"El enlace de activación no es válido."}
+#             Usuarios.Activo sigue en 0; no cambia ninguna fila.
+#   d) Abrir el enlace B:
+GET http://localhost:5000/api/auth/activar?token=<token-del-enlace-B>
+
+#   Esperado: HTTP 200, la cuenta se activa (Activo = 1, token de B con Usado = 1).
+#   Los tokens ya usados no se tocan al reenviar (solo se invalidan los que no se usaron).
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
