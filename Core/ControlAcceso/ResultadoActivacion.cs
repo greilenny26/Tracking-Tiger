@@ -4,7 +4,8 @@ public enum EstadoActivacion
 {
     Activada,
     EnlaceInvalido,
-    EnlaceUsado
+    EnlaceUsado,
+    EnlaceVencido
 }
 
 // Resultado de abrir el enlace de activación (RF-CA-16). El rechazo usa un mensaje genérico:
@@ -19,4 +20,7 @@ public sealed record ResultadoActivacion(EstadoActivacion Estado, string Mensaje
 
     public static ResultadoActivacion EnlaceUsado() =>
         new(EstadoActivacion.EnlaceUsado, "Este enlace de activación ya fue usado.");
+
+    public static ResultadoActivacion EnlaceVencido() =>
+        new(EstadoActivacion.EnlaceVencido, "El enlace de activación ya venció.");
 }

@@ -298,6 +298,17 @@ GET http://localhost:5000/api/auth/activar?token=<token-ya-usado-en-el-caso-1>
 #   Esperado: HTTP 400 {"mensaje":"Este enlace de activación ya fue usado."}
 #   En DB Browser no cambia nada: Usuarios.Activo y TokensActivacion.Usado siguen en 1.
 
+### 5. Enlace vencido
+#   Registrar un usuario nuevo y, en DB Browser, adelantar el vencimiento de su token sin usar:
+#     UPDATE TokensActivacion SET FechaVencimiento = '2020-01-01 00:00:00'
+#     WHERE UsuarioId = <id-del-usuario-nuevo>;
+#   ("Escribir cambios" para guardar). Luego abrir su enlace:
+GET http://localhost:5000/api/auth/activar?token=<token-del-usuario-nuevo>
+
+#   Esperado: HTTP 400 {"mensaje":"El enlace de activación ya venció."}
+#   En DB Browser no cambia nada: Usuarios.Activo = 0 y TokensActivacion.Usado = 0.
+#   El vencimiento se compara con IReloj.AhoraUtc (UTC), no con la hora local.
+
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------

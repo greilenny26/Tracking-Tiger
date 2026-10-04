@@ -1,17 +1,20 @@
 using Microsoft.EntityFrameworkCore;
+using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.Persistencia;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
 
 // Activación de cuentas por enlace (RF-CA-16). Toda la regla vive aquí, no en el controlador (RD-02).
-// Un token inexistente o ya usado se rechaza sin cambiar nada.
+// Un token inexistente, ya usado o vencido se rechaza sin cambiar nada.
 public sealed class ServicioActivacion
 {
     private readonly ContextoDatos _contexto;
+    private readonly IReloj _reloj;
 
-    public ServicioActivacion(ContextoDatos contexto)
+    public ServicioActivacion(ContextoDatos contexto, IReloj reloj)
     {
         _contexto = contexto;
+        _reloj = reloj;
     }
 
     public async Task<ResultadoActivacion> ActivarAsync(string? tokenPlano)
@@ -33,6 +36,10 @@ public sealed class ServicioActivacion
         // Un solo uso (RF-CA-16): abrir el enlace por segunda vez se rechaza.
         if (token.Usado)
             return ResultadoActivacion.EnlaceUsado();
+
+        // Vencimiento (RF-CA-16): la hora sale del reloj único en UTC (RD-11), nunca de DateTime directo.
+        if (token.FechaVencimiento < _reloj.AhoraUtc)
+            return ResultadoActivacion.EnlaceVencido();
 
         token.Usuario.Activar();
         token.MarcarUsado();
