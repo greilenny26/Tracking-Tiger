@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.Comun;
+using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
 using Tracking_Tiger.Core.Persistencia;
 using Tracking_Tiger.Core.Web;
@@ -13,6 +14,7 @@ builder.Services.AddControllers()
 builder.Services.AddExceptionHandler<ManejadorErroresGlobal>();
 
 builder.Services.AddSingleton<IReloj, RelojSistema>();
+builder.Services.AddSingleton<IHasherContrasenas, HasherContrasenasPbkdf2>();
 
 builder.Services.AddDbContext<ContextoDatos>(opciones =>
 opciones.UseSqlite("Data Source=trackingtiger.db"));

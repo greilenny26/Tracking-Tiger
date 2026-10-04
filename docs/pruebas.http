@@ -119,6 +119,20 @@
 #   cuando exista el registro.
 
 ### ------------------------------------------------------------
+### RF-CA-02 — Contraseña guardada con hash y sal (servicio, sin endpoint todavía)
+### ------------------------------------------------------------
+# Servicio: Core/ControlAcceso/HasherContrasenasPbkdf2.cs (PBKDF2-HMAC-SHA256, 600 000
+# iteraciones, sal aleatoria de 16 bytes por contraseña, hash de 32 bytes).
+# Se prueba de punta a punta cuando exista el registro; entonces, en DB Browser:
+#
+#   Esperado: Usuarios.HashContrasena tiene la forma
+#             PBKDF2-SHA256$600000$<sal base64>$<hash base64>
+#             y no contiene la contraseña escrita.
+#   Registrar dos usuarios con la MISMA contraseña:
+#   Esperado: sus HashContrasena son distintos (sal distinta).
+#   Iniciar sesión con la contraseña correcta funciona; con una incorrecta, no.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
