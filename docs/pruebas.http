@@ -229,6 +229,21 @@ Content-Type: application/json
 #   esa violación y responde el mismo 409, sin error 500 ni traza.
 
 ### ------------------------------------------------------------
+### RF-CA-15 — Token de activación guardado con el registro (sin envío todavía)
+### ------------------------------------------------------------
+# Después del caso 1 de RF-CA-01 (registro válido), en DB Browser:
+#
+#   Esperado en TokensActivacion: una fila con UsuarioId = Id del usuario nuevo,
+#             TokenHash de 64 caracteres hexadecimales en minúsculas (SHA-256),
+#             Usado = 0, FechaEmision = FechaCreacion del usuario (UTC) y
+#             FechaVencimiento = FechaEmision + 24 horas.
+#   El token en claro (43 caracteres Base64Url) NO aparece en la base, ni en la respuesta
+#   HTTP, ni en la consola del servidor.
+#   Registros rechazados (casos 2 a 6): no se crea ninguna fila en Usuarios ni en TokensActivacion.
+#   Mismo SaveChanges: si falla el guardado, no queda un usuario sin token ni un token sin usuario.
+#   No se encola ningún correo todavía (CorreosEnCola sin filas nuevas).
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

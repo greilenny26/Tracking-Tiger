@@ -14,6 +14,7 @@ public class ContextoDatos : DbContext
 
     public DbSet<CorreoEnCola> CorreosEnCola => Set<CorreoEnCola>();
     public DbSet<Usuario> Usuarios => Set<Usuario>();
+    public DbSet<TokenActivacion> TokensActivacion => Set<TokenActivacion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -42,6 +43,22 @@ public class ContextoDatos : DbContext
             usuario.Property(u => u.FechaCreacion).IsRequired();
             // RF-CA-01: la base rechaza un segundo usuario con el mismo correo.
             usuario.HasIndex(u => u.Correo).IsUnique();
+        });
+
+        modelBuilder.Entity<TokenActivacion>(token =>
+        {
+            token.ToTable("TokensActivacion");
+            token.HasKey(t => t.Id);
+            token.Property(t => t.TokenHash).IsRequired().HasMaxLength(64);
+            token.Property(t => t.FechaEmision).IsRequired();
+            token.Property(t => t.FechaVencimiento).IsRequired();
+            token.Property(t => t.Usado).IsRequired();
+            // La activación busca el token por su hash.
+            token.HasIndex(t => t.TokenHash).IsUnique();
+            token.HasOne(t => t.Usuario)
+                .WithMany()
+                .HasForeignKey(t => t.UsuarioId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -49,25 +49,38 @@ public sealed class ServicioRegistro
             return ResultadoRegistro.CorreoDuplicado();
 
         // Nace inactivo por regla de dominio (RF-CA-15).
-        var usuario = Usuario.CrearNuevo(nombre, correoNormalizado, _hasher.Hashear(contrasena!), _reloj.AhoraUtc);
+        var ahora = _reloj.AhoraUtc;
+        var usuario = Usuario.CrearNuevo(nombre, correoNormalizado, _hasher.Hashear(contrasena!), ahora);
+
+        // Token de activación (RF-CA-15): en la base solo queda su hash; el valor en claro
+        // vive solo en memoria dentro del resultado y nunca se registra en logs.
+        var tokenPlano = GeneradorTokens.GenerarToken();
+        var token = TokenActivacion.Emitir(usuario, GeneradorTokens.CalcularHash(tokenPlano), ahora);
 
         _contexto.Usuarios.Add(usuario);
+        _contexto.TokensActivacion.Add(token);
         try
         {
+            // Un solo SaveChanges = una sola transacción: se guardan el usuario y su token, o ninguno.
             await _contexto.SaveChangesAsync();
         }
         catch (DbUpdateException error) when (EsCorreoDuplicado(error))
         {
             // Carrera: otra petición registró el mismo correo entre la consulta y el guardado.
             // El índice único lo impidió; se responde igual que en la comprobación previa.
+            _contexto.Entry(token).State = EntityState.Detached;
             _contexto.Entry(usuario).State = EntityState.Detached;
             return ResultadoRegistro.CorreoDuplicado();
         }
 
-        return ResultadoRegistro.Registrado(new UsuarioRegistrado(usuario.Id, usuario.Nombre, usuario.Correo, usuario.Activo));
+        return ResultadoRegistro.Registrado(
+            new UsuarioRegistrado(usuario.Id, usuario.Nombre, usuario.Correo, usuario.Activo),
+            tokenPlano);
     }
 
+    // Solo la violación del índice único de Usuarios.Correo; cualquier otra sigue al manejador global.
     private static bool EsCorreoDuplicado(DbUpdateException error) =>
         error.InnerException is SqliteException sqlite
-        && sqlite.SqliteExtendedErrorCode == ErrorSqliteRestriccionUnica;
+        && sqlite.SqliteExtendedErrorCode == ErrorSqliteRestriccionUnica
+        && sqlite.Message.Contains("Usuarios.Correo", StringComparison.Ordinal);
 }
