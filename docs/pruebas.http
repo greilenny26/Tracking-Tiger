@@ -414,14 +414,14 @@ GET http://localhost:5000/api/auth/activar?token=tokenQueNoExiste123
 ### ------------------------------------------------------------
 ### RF-CA-03 — Inicio de sesión: POST /api/auth/login
 ### ------------------------------------------------------------
-# Solo el camino feliz. Todavía NO se exige cuenta activa ni se igualan los tiempos de respuesta.
+# Todavía NO se exige cuenta activa.
 # Antes: registrar un usuario con el caso 1 de RF-CA-01 (contraseña "Clave1234").
 
 ### 1. Credenciales correctas (el correo admite mayúsculas y espacios: se normaliza)
 POST http://localhost:5000/api/auth/login
 Content-Type: application/json
 
-{"correo": "  <correo-registrado-en-mayúsculas> ", "contrasena": "Clave1234"}
+{"correo": "alexabello383@gmail.com ", "contrasena": "Clave4321"}
 
 #   Esperado: HTTP 200 {"token":"<43 caracteres Base64Url>","venceEn":"<fecha UTC terminada en Z>"}
 #             venceEn = ahora (UTC) + 8 horas.
@@ -438,6 +438,7 @@ Content-Type: application/json
 {"correo": "<correo-registrado>", "contrasena": "OtraClave99"}
 
 #   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."}. No se crea ninguna sesión.
+#             Mismo código y mismo cuerpo, byte por byte, que el caso 3: no revela qué dato falló.
 
 ### 3. Correo inexistente
 POST http://localhost:5000/api/auth/login
@@ -445,8 +446,8 @@ Content-Type: application/json
 
 {"correo": "nadie@example.com", "contrasena": "Clave1234"}
 
-#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."} — idéntico al caso 2.
-#   No se crea ninguna sesión.
+#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."} — mismo código y mismo cuerpo que el
+#             caso 2: no revela si el correo está registrado. No se crea ninguna sesión.
 
 ### 4. Campos vacíos o ausentes
 POST http://localhost:5000/api/auth/login
@@ -457,6 +458,18 @@ Content-Type: application/json
 #   Esperado: HTTP 400 {"mensaje":"El correo es obligatorio."}
 #   Con {"correo":"ana@example.com","contrasena":""} o sin "contrasena":
 #             HTTP 400 {"mensaje":"La contraseña es obligatoria."}
+
+### 5. Tiempo de respuesta similar: correo inexistente vs. contraseña incorrecta
+#   En PowerShell (sirve en 5.1 y en 7), con la API corriendo. Hacer primero una petición cualquiera
+#   para descartarla: la primera tras iniciar es más lenta porque calcula el hash ficticio.
+#
+#   function Medir($cuerpo) { (Measure-Command { try { Invoke-WebRequest http://localhost:5000/api/auth/login -Method Post -ContentType "application/json" -Body $cuerpo -UseBasicParsing } catch {} }).TotalMilliseconds }
+#   1..5 | ForEach-Object { "inexistente: " + (Medir '{"correo":"nadie@example.com","contrasena":"Clave1234"}') }
+#   1..5 | ForEach-Object { "clave mala:  " + (Medir '{"correo":"<correo-registrado>","contrasena":"OtraClave99"}') }
+#
+#   Esperado: tiempos parecidos en ambos grupos (unos cientos de ms cada uno, por el PBKDF2),
+#             sin una diferencia constante entre correo inexistente y contraseña incorrecta.
+#   La consola del servidor no muestra el correo ni la contraseña de ninguna petición.
 #   No se crea ninguna sesión.
 
 ### ------------------------------------------------------------
