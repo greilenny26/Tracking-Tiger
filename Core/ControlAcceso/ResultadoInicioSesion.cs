@@ -4,7 +4,8 @@ public enum EstadoInicioSesion
 {
     Iniciada,
     DatosInvalidos,
-    CredencialesInvalidas
+    CredencialesInvalidas,
+    CuentaInactiva
 }
 
 // Resultado de iniciar sesión (RF-CA-03). Token es la credencial en claro: solo existe en memoria
@@ -34,4 +35,8 @@ public sealed class ResultadoInicioSesion
     // Mismo mensaje para correo inexistente y contraseña incorrecta: no revela cuál falló.
     public static ResultadoInicioSesion CredencialesInvalidas() =>
         new(EstadoInicioSesion.CredencialesInvalidas, "Credenciales inválidas.", null, null);
+
+    // Solo se usa con la contraseña ya verificada (RF-CA-15).
+    public static ResultadoInicioSesion CuentaInactiva() =>
+        new(EstadoInicioSesion.CuentaInactiva, "La cuenta no está activa. Revisa tu correo para activarla.", null, null);
 }

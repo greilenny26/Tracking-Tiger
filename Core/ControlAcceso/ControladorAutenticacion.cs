@@ -72,7 +72,8 @@ public sealed class ControladorAutenticacion : ControllerBase
     }
 
     // RF-CA-03: 200 con la credencial de sesión y su vencimiento (UTC), 400 si falta el correo
-    // o la contraseña, 401 con el mismo mensaje ante cualquier otra falla.
+    // o la contraseña, 403 si la contraseña es correcta pero la cuenta no está activa (RF-CA-15),
+    // 401 con el mismo mensaje ante cualquier otra falla.
     // El token en claro solo aparece en esta respuesta.
     [HttpPost("login")]
     public async Task<IActionResult> IniciarSesion([FromBody] SolicitudInicioSesion solicitud)
@@ -83,6 +84,7 @@ public sealed class ControladorAutenticacion : ControllerBase
         {
             EstadoInicioSesion.Iniciada => Ok(new { token = resultado.Token, venceEn = resultado.VenceEn }),
             EstadoInicioSesion.DatosInvalidos => BadRequest(new { mensaje = resultado.Mensaje }),
+            EstadoInicioSesion.CuentaInactiva => StatusCode(StatusCodes.Status403Forbidden, new { mensaje = resultado.Mensaje }),
             _ => Unauthorized(new { mensaje = resultado.Mensaje })
         };
     }

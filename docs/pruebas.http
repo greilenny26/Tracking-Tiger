@@ -414,8 +414,9 @@ GET http://localhost:5000/api/auth/activar?token=tokenQueNoExiste123
 ### ------------------------------------------------------------
 ### RF-CA-03 — Inicio de sesión: POST /api/auth/login
 ### ------------------------------------------------------------
-# Todavía NO se exige cuenta activa.
-# Antes: registrar un usuario con el caso 1 de RF-CA-01 (contraseña "Clave1234").
+# El inicio de sesión exige cuenta activa (RF-CA-15).
+# Antes del caso 1: registrar un usuario con el caso 1 de RF-CA-01 (contraseña "Clave1234")
+# y activarlo con su enlace (caso 1 de RF-CA-16).
 
 ### 1. Credenciales correctas (el correo admite mayúsculas y espacios: se normaliza)
 POST http://localhost:5000/api/auth/login
@@ -471,6 +472,29 @@ Content-Type: application/json
 #             sin una diferencia constante entre correo inexistente y contraseña incorrecta.
 #   La consola del servidor no muestra el correo ni la contraseña de ninguna petición.
 #   No se crea ninguna sesión.
+
+### 6. Cuenta sin activar + contraseña correcta
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-de-un-usuario-sin-activar>", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 403 {"mensaje":"La cuenta no está activa. Revisa tu correo para activarla."}
+#   No se crea ninguna sesión.
+
+### 7. Cuenta sin activar + contraseña incorrecta
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-de-un-usuario-sin-activar>", "contrasena": "OtraClave99"}
+
+#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."} — idéntico a los casos 2 y 3:
+#             sin la contraseña correcta no se puede saber si la cuenta está activa.
+#   No se crea ninguna sesión.
+
+### 8. Después de activar
+#   Abrir el enlace de activación de ese usuario (caso 1 de RF-CA-16) y repetir el caso 6.
+#   Esperado: HTTP 200 {"token":"...","venceEn":"..."} y una fila nueva en SesionesUsuario.
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API

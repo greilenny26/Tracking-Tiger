@@ -5,7 +5,7 @@ using Tracking_Tiger.Core.Persistencia;
 namespace Tracking_Tiger.Core.ControlAcceso;
 
 // Inicio de sesión (RF-CA-03). Toda la regla vive aquí, no en el controlador (RD-02).
-// La comprobación de cuenta activa llega en un paso aparte.
+// Una cuenta sin activar solo se rechaza como tal después de verificar la contraseña (RF-CA-15).
 public sealed class ServicioSesion
 {
     // Hash ficticio con el mismo algoritmo e iteraciones que los reales. Se calcula una sola vez por
@@ -42,6 +42,12 @@ public sealed class ServicioSesion
 
         if (usuario is null || !contrasenaCorrecta)
             return ResultadoInicioSesion.CredencialesInvalidas();
+
+        // RF-CA-15: la cuenta sin activar se informa SOLO cuando la contraseña ya es correcta. Con una
+        // contraseña incorrecta sale el 401 genérico de arriba, así quien no conoce la contraseña
+        // no puede averiguar el estado de una cuenta.
+        if (!usuario.Activo)
+            return ResultadoInicioSesion.CuentaInactiva();
 
         // Credencial de sesión: 32 bytes aleatorios en Base64 apto para URL. En la base solo queda
         // su SHA-256; el valor en claro solo viaja en esta respuesta y nunca se registra en logs.
