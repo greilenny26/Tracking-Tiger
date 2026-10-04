@@ -63,3 +63,51 @@
   - Consulta directa a `trackingtiger.db`: la tabla `CorreosEnCola` tiene las filas encoladas con `Estado = Pendiente`, `Intentos = 0`, `FechaCreacion` en UTC y `FechaEnvio` / `UltimoError` vacíos.
 - **Commit(s):**
   - `74d7fef` Agrega el servicio de cola de correos
+
+## Sesión 5: Registro de usuarios y restricción de correo único (RF-CA-01)
+- **Qué le pedí:**: Implementar la entidad Usuario, su migración correspondiente y la lógica de registro de usuarios validando la unicidad del correo.
+- **Qué devolvió:**
+Creación de la entidad Usuario y registro del modelo con índice único IX_Usuarios_Correo en ContextoDatos.
+Generación de la migración CrearUsuario (20261004104928_CrearUsuario.cs).
+Lógica de registro para procesar y validar el correo normalizado, asegurando el almacenamiento seguro de la contraseña y la fecha de creación en UTC.
+Adición de los casos de prueba iniciales de registro en docs/pruebas.http.
+
+- **Dónde se equivocó:** Hubo un pequeño desfase de líneas al intentar aplicar un parche automatizado (patch does not apply) sobre el archivo de pruebas HTTP debido a modificaciones locales previas.
+
+- **Cómo lo detecté:** El comando git apply de Git devolvió un error de conflicto de parche en docs/pruebas.http.
+
+- **Cómo lo corregí:**  Se descartó el parche automatizado y se manejó el flujo de manera limpia realizando un git add directo de los archivos modificados y nuevos del código fuente.
+
+- **Commit(s):**
+
+
+ - `9ea0628` Agrega la activacion de cuentas por enlace
+
+ - `b891c3d`  Encolar el correo de activacion al registrar
+
+ - `0c59de6`  Permite encolar correos en la transaccion de la operacion
+
+ - `0936998`  Genera el token de activacion al registrar 
+
+## Sesión 6: Reenvío del enlace de activación y unificación de respuestas (RF-CA-16 y RF-CA-17)
+- **Qué le pedí:**: Implementar la funcionalidad de reenvío del enlace de activación (RF-CA-17), asegurar la invalidación de tokens previos y unificar la respuesta del endpoint, además de retirar tokens reales de la documentación de pruebas (RF-CA-16).
+
+- **Qué devolvió:**
+Nuevos componentes en Core/ControlAcceso/: EmisorActivacion.cs, ResultadoReenvio.cs, ServicioReenvioActivacion.cs y SolicitudReenvioActivacion.cs.
+Actualización de servicios y controladores (ControladorAutenticacion.cs, ServicioActivacion.cs, ServicioRegistro.cs, TokenActivacion.cs, ContextoDatos.cs y Program.cs).
+Migración InvalidarTokensActivacion (20261004195656_InvalidarTokensActivacion.cs).
+Actualización del archivo docs/pruebas.http para eliminar tokens reales expuestos.
+
+- **Dónde se equivocó:** Al intentar aplicar parches automáticos cruzados, Git requirió organización manual del staging area para separar el commit de limpieza de documentación del commit funcional.
+
+- **Cómo lo detecté:** Mediante los mensajes de estado de git status que mostraban archivos modificados y rastreos pendientes.
+- **Cómo lo corregí:** Se ejecutaron los comandos git add y git commit de forma secuencial y limpia para mantener la higiene de commits exigida por el proyecto.
+
+- **Commit(s):**
+ - `e97e501`  Agrega el reenvio del enlace de activacion
+
+- `a81c37e` Quita el token real de las pruebas de activacion
+
+- `985a20f` Rechaza el enlace de activacion vencido
+
+- `e7a2836` Rechaza el enlace de activacion vencido
