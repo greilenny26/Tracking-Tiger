@@ -1,0 +1,117 @@
+### Pruebas manuales — Tracking Tiger (Práctica 1)
+### Cada caso: petición o comando + resultado esperado como comentario.
+
+### ------------------------------------------------------------
+### RF-NOT-08 — Encolar un correo de prueba (comando de desarrollo, no HTTP)
+### ------------------------------------------------------------
+# Ejecutar en la terminal, desde la raíz del proyecto:
+#
+#   dotnet run -- encolar-prueba prueba@example.com
+#   Esperado: "El correo quedó en la cola en estado pendiente. Id: <n>"
+#             El servidor web NO se inicia y no se contacta ningún servidor SMTP.
+#             En la tabla CorreosEnCola aparece la fila con Estado = Pendiente,
+#             Intentos = 0 y FechaCreacion en UTC.
+#
+#   dotnet run -- encolar-prueba "   "
+#   Esperado: "Rechazado: El destinatario es obligatorio." (sin excepción ni traza)
+#
+#   dotnet run -- encolar-prueba
+#   Esperado: "Uso: dotnet run -- encolar-prueba <destinatario>"
+
+### ------------------------------------------------------------
+### RF-NOT-13 — Configuración SMTP por variables de entorno
+### ------------------------------------------------------------
+# La configuración solo se lee cuando el enviador la pide, no al iniciar la API.
+#
+#   En una terminal SIN haber ejecutado "call .env.cmd":
+#   dotnet run
+#   Esperado: la API inicia normalmente ("Now listening on: http://localhost:5000"),
+#             sin errores por falta de SMTP_HOST, SMTP_USUARIO ni SMTP_CLAVE.
+#
+#   Cuando exista el enviador, ejecutarlo sin las variables:
+#   Esperado: "Faltan por configurar las variables de entorno SMTP_HOST, SMTP_USUARIO,
+#             SMTP_CLAVE para enviar correos." — nombra las variables, nunca sus valores.
+#   SMTP_PORT vacío → 587. SMTP_PORT no numérico o fuera de 1–65535 → mensaje que nombra SMTP_PORT.
+#   SMTP_REMITENTE vacío → se usa SMTP_USUARIO.
+
+### ------------------------------------------------------------
+### RF-NOT-09 — Proceso independiente de envío (comando, no HTTP)
+### ------------------------------------------------------------
+# En CMD, desde la raíz del proyecto:
+#
+#   Sin variables SMTP (terminal nueva, sin "call .env.cmd"):
+#   dotnet run -- enviar-correos
+#   Esperado: "Faltan por configurar las variables de entorno SMTP_HOST, SMTP_USUARIO,
+#             SMTP_CLAVE para enviar correos." Código de salida 1. No inicia el servidor web
+#             y los correos siguen en Pendiente.
+#
+#   Camino feliz:
+#   call .env.cmd
+#   dotnet run -- encolar-prueba <tu-correo>
+#   dotnet run -- enviar-correos
+#   Esperado: "Correos enviados: N" (N = pendientes que había). No inicia el servidor web.
+#             El correo llega a la bandeja. En CorreosEnCola esas filas quedan con
+#             Estado = Enviado y FechaEnvio en UTC.
+#
+### ------------------------------------------------------------
+### RF-NOT-12 — Ejecutar el envío dos veces no duplica correos
+### ------------------------------------------------------------
+#   Justo después del camino feliz anterior:
+#   dotnet run -- enviar-correos
+#   Esperado: "No hay correos pendientes." No llega ningún correo nuevo a la bandeja
+#             y FechaEnvio de las filas Enviado no cambia.
+#
+#   Con la base sin filas Pendiente desde el inicio:
+#   Esperado: "No hay correos pendientes." y no se conecta al servidor SMTP.
+#
+#   Cada fila se guarda como Enviado apenas sale su correo: si el envío se corta a mitad
+#   del lote, las ya enviadas quedan en Enviado y la siguiente ejecución solo envía las restantes.
+
+### ------------------------------------------------------------
+### RF-NOT-08 — El envío tolera fallas del servidor SMTP
+### ------------------------------------------------------------
+# Primero encolar uno o más correos: dotnet run -- encolar-prueba <tu-correo>
+# Usar solo valores falsos en una terminal aparte (no hace falta "call .env.cmd"):
+#
+   #set SMTP_HOST=localhost
+   #set SMTP_PORT=2599
+  #set SMTP_USUARIO=usuario-falso
+  #set SMTP_CLAVE=clave-falsa
+ # dotnet run -- enviar-correos
+#   Esperado (en pocos segundos):
+#     "No se pudo conectar con el servidor SMTP. Revisa SMTP_HOST, SMTP_PORT y la conexión a internet."
+#     "Correos enviados: 0. Quedan pendientes: N."
+#   Código de salida 1, sin trazas, sin mostrar la clave. Todas las filas siguen Pendiente.
+#
+#   set SMTP_HOST=10.255.255.1
+#   set SMTP_PORT=587
+#   dotnet run -- enviar-correos
+#   Esperado (a los ~15 segundos, nunca se cuelga):
+#     "El servidor SMTP no respondió en 15 segundos. ..." y las filas siguen Pendiente.
+#
+#   Luego, en una terminal nueva con "call .env.cmd":
+#   dotnet run -- enviar-correos
+#   Esperado: "Correos enviados: N" — los que quedaron pendientes salen ahora.
+#
+#   Si el servidor rechaza un correo concreto (por ejemplo, un destinatario inválido):
+#   Esperado: "Correo <Id>: El servidor SMTP rechazó al destinatario. Queda pendiente."
+#             y el resto del lote se envía igual.
+
+### ------------------------------------------------------------
+### RD-08 — Manejo global de errores de la API
+### ------------------------------------------------------------
+# Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
+# que lanzaba una excepción con una consulta y una ruta falsas:
+#   Esperado: HTTP 500, Content-Type application/json, aun en Development y con Accept: text/html:
+#             {"mensaje":"Ocurrió un error inesperado. Intenta de nuevo más tarde."}
+#             La consola del servidor muestra "fail: ...ManejadorErroresGlobal" con la excepción real.
+#
+# JSON mal formado: usar el primer endpoint POST que exista (por ejemplo, el de registro).
+POST http://localhost:5000/api/<endpoint-post>
+Content-Type: application/json
+
+{"correo": "ana@example.com",
+
+#   Esperado: HTTP 400
+#             {"mensaje":"El cuerpo de la solicitud no es un JSON válido o no tiene el formato esperado."}
+#   Lo mismo con cuerpo vacío o con un tipo incorrecto (texto donde va un número).

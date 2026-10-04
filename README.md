@@ -24,15 +24,22 @@ cd Tracking-Tiger
 
 ## Ejecutar
 
+El proyecto es una API web de ASP.NET Core. Para iniciarla:
+
 ```
 dotnet run
 ```
 
-La primera vez tarda un poco porque restaura dependencias y compila. El resultado esperado en la consola es:
+La primera vez tarda un poco porque restaura dependencias y compila. Cuando la API está lista, la consola muestra:
 
 ```
-Hello, World!
+Now listening on: http://localhost:5000
+Application started. Press Ctrl+C to shut down.
 ```
+
+Para comprobar que responde, abre `http://localhost:5000/` en el navegador. Por ahora la respuesta esperada es **404 (No encontrado)**, porque la API todavía no tiene endpoints. En la consola puede aparecer el aviso `No action descriptors found`; también es esperado mientras no haya controladores.
+
+Para detener la API, presiona `Ctrl+C`.
 
 La primera ejecución de .NET en una máquina también muestra un mensaje de bienvenida sobre telemetría. Es normal y no es un error.
 
