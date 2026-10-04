@@ -619,6 +619,42 @@ Content-Type: application/json
 #   Esperado: el mismo HTTP 401 y su IntentosFallidos también aumenta (es un usuario existente).
 
 ### ------------------------------------------------------------
+### RF-CA-19 — Bloqueo temporal tras 5 intentos fallidos
+### ------------------------------------------------------------
+# Antes: un usuario activo con IntentosFallidos = 0 y BloqueadoHasta = NULL (contraseña "Clave1234").
+
+### 1. Cinco contraseñas incorrectas seguidas (ejecutar 5 veces)
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "OtraClave99"}
+
+#   Esperado: las 5 veces HTTP 401 {"mensaje":"Credenciales inválidas."}
+#   Tras el 5.º: IntentosFallidos = 5 y BloqueadoHasta ≈ ahora (UTC) + 15 minutos.
+
+### 2. Sexto intento con la contraseña CORRECTA
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-registrado>", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 429 {"mensaje":"Cuenta bloqueada temporalmente. Intenta de nuevo más tarde."}
+#   IntentosFallidos sigue en 5 y BloqueadoHasta no cambia (no se extiende).
+
+### 3. Más intentos durante el bloqueo (correctos o incorrectos)
+#   Repetir los casos 1 y 2.
+#   Esperado: siempre HTTP 429 con el mismo mensaje; no cambia ninguna columna.
+
+### 4. Bloqueo vencido + contraseña incorrecta
+#   En DB Browser: UPDATE Usuarios SET BloqueadoHasta = '2020-01-01 00:00:00' WHERE Id = <id>;
+#   ("Escribir cambios"). Luego repetir el caso 1 una vez.
+#   Esperado: HTTP 401; IntentosFallidos = 1 y BloqueadoHasta = NULL (se reinició antes de procesar).
+
+### 5. Bloqueo vencido + contraseña correcta
+#   Volver a bloquear (caso 1 hasta el 5.º fallo), vencer el bloqueo como en el caso 4 y repetir el caso 2.
+#   Esperado: HTTP 200 con token.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

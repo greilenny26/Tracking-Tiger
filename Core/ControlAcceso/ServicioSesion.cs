@@ -12,6 +12,10 @@ public sealed class ServicioSesion
     // proceso a partir de un valor aleatorio: ninguna contraseña real coincide con él.
     private static string? _hashFicticio;
 
+    // RF-CA-19: al 5.º fallo la cuenta queda bloqueada 15 minutos.
+    private const int LimiteIntentosFallidos = 5;
+    private static readonly TimeSpan DuracionBloqueo = TimeSpan.FromMinutes(15);
+
     private readonly ContextoDatos _contexto;
     private readonly IHasherContrasenas _hasher;
     private readonly IReloj _reloj;
@@ -33,6 +37,22 @@ public sealed class ServicioSesion
 
         var correoNormalizado = Usuario.NormalizarCorreo(correo);
         var usuario = await _contexto.Usuarios.SingleOrDefaultAsync(u => u.Correo == correoNormalizado);
+        var ahora = _reloj.AhoraUtc;
+
+        if (usuario?.BloqueadoHasta is { } bloqueadoHasta)
+        {
+            // RF-CA-19: mientras dure el bloqueo se rechaza TODO intento, sin verificar la contraseña,
+            // sin tocar el contador y sin extender el bloqueo.
+            if (bloqueadoHasta > ahora)
+                return ResultadoInicioSesion.Bloqueada();
+
+            // Bloqueo vencido: contador a 0 y sin bloqueo antes de procesar este intento.
+            await _contexto.Usuarios
+                .Where(u => u.Id == usuario.Id && u.BloqueadoHasta != null && u.BloqueadoHasta <= ahora)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(u => u.IntentosFallidos, 0)
+                    .SetProperty(u => u.BloqueadoHasta, (DateTime?)null));
+        }
 
         // RF-CA-03: correo inexistente y contraseña incorrecta deben ser indistinguibles. Si el usuario
         // no existe se verifica igual contra el hash ficticio, así ambos casos hacen el mismo trabajo
@@ -45,9 +65,18 @@ public sealed class ServicioSesion
             // RF-CA-19: una contraseña incorrecta de un usuario EXISTENTE suma un intento fallido.
             // Un correo inexistente no cambia nada. La respuesta es la misma en ambos casos.
             if (usuario is not null)
+            {
+                var hasta = ahora + DuracionBloqueo;
                 await _contexto.Usuarios
                     .Where(u => u.Id == usuario.Id)
-                    .ExecuteUpdateAsync(s => s.SetProperty(u => u.IntentosFallidos, u => u.IntentosFallidos + 1));
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(u => u.IntentosFallidos, u => u.IntentosFallidos + 1)
+                        // Al llegar al 5.º fallo se bloquea; si ya hay bloqueo, no se extiende.
+                        .SetProperty(u => u.BloqueadoHasta, u =>
+                            u.IntentosFallidos + 1 >= LimiteIntentosFallidos && u.BloqueadoHasta == null
+                                ? hasta
+                                : u.BloqueadoHasta));
+            }
 
             return ResultadoInicioSesion.CredencialesInvalidas();
         }

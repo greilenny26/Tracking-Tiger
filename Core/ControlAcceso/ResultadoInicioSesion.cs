@@ -5,7 +5,8 @@ public enum EstadoInicioSesion
     Iniciada,
     DatosInvalidos,
     CredencialesInvalidas,
-    CuentaInactiva
+    CuentaInactiva,
+    Bloqueada
 }
 
 // Resultado de iniciar sesión (RF-CA-03). Token es la credencial en claro: solo existe en memoria
@@ -39,4 +40,8 @@ public sealed class ResultadoInicioSesion
     // Solo se usa con la contraseña ya verificada (RF-CA-15).
     public static ResultadoInicioSesion CuentaInactiva() =>
         new(EstadoInicioSesion.CuentaInactiva, "La cuenta no está activa. Revisa tu correo para activarla.", null, null);
+
+    // Bloqueo temporal por intentos fallidos (RF-CA-19): se responde sin verificar la contraseña.
+    public static ResultadoInicioSesion Bloqueada() =>
+        new(EstadoInicioSesion.Bloqueada, "Cuenta bloqueada temporalmente. Intenta de nuevo más tarde.", null, null);
 }
