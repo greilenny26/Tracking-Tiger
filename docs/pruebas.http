@@ -1132,7 +1132,6 @@ Content-Type: application/json
 ### ------------------------------------------------------------
 # Antes: pedir un código con POST /api/auth/recuperar (usuario activo con contraseña "Clave1234")
 # y copiarlo del correo recibido (o del Cuerpo en CorreosEnCola).
-# Todavía no se aplica la política de contraseña (llega en un paso aparte).
 
 ### 1. Código válido
 POST http://localhost:5000/api/auth/restablecer
@@ -1192,6 +1191,18 @@ Content-Type: application/json
 #   Esperado: HTTP 400 {"mensaje":"El código no es válido, ya fue usado o venció."}
 #   La contraseña NO cambia y el código sigue con Usado = 0.
 #   El vencimiento se compara con IReloj.AhoraUtc (UTC), no con la hora local.
+
+### 7. Contraseña nueva que no cumple la política (con un código VÁLIDO)
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "<código-vigente>", "nuevaContrasena": "abc12"}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña debe tener al menos 8 caracteres."}
+#   Con "abcdefgh" → "La contraseña debe incluir al menos un número."; con "12345678" →
+#   "La contraseña debe incluir al menos una letra."
+#   El código NO se consume (sigue Usado = 0), la contraseña no cambia y las sesiones siguen abiertas.
+#   Reintentar con el MISMO código y "NuevaClave99" → HTTP 200.
 
 ### ------------------------------------------------------------
 ### RF-CA-12 — Las sesiones abiertas dejan de ser válidas al restablecer la contraseña

@@ -78,13 +78,20 @@ public sealed class ServicioRecuperacionContrasena
 
     // RF-CA-11: con un código válido define la contraseña nueva. Un código desconocido, ya usado o
     // vencido se rechaza con el mismo mensaje y sin cambiar nada. RF-CA-12: al restablecerla se
-    // revocan TODAS las sesiones del usuario. La política de contraseña llega en un paso aparte.
+    // revocan TODAS las sesiones del usuario. RF-CA-14: la contraseña nueva cumple la política antes de
+    // tocar el código; si no la cumple, el código sigue sin usar y el usuario puede reintentar.
     public async Task<ResultadoRestablecimiento> RestablecerAsync(string? codigo, string? nuevaContrasena)
     {
         if (string.IsNullOrWhiteSpace(codigo))
             return ResultadoRestablecimiento.CodigoInvalido();
         if (string.IsNullOrEmpty(nuevaContrasena))
             return ResultadoRestablecimiento.DatosInvalidos("La contraseña nueva es obligatoria.");
+
+        // RF-CA-14: misma política que en el registro (PoliticaContrasena, único lugar de la regla).
+        // Se valida antes de buscar el código: un rechazo no lo consume.
+        var validacionContrasena = PoliticaContrasena.Validar(nuevaContrasena);
+        if (!validacionContrasena.Valido)
+            return ResultadoRestablecimiento.DatosInvalidos(validacionContrasena.Mensaje!);
 
         // En la base solo está el hash: se busca por el SHA-256 del código recibido.
         var codigoHash = GeneradorTokens.CalcularHash(codigo.Trim());
