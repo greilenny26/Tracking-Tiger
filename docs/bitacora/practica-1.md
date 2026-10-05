@@ -184,3 +184,60 @@ Actualización del archivo docs/pruebas.http para eliminar tokens reales expuest
   - `7483672` Agrega la desactivación de usuarios por el Administrador
   - `272f1a9` Agrega la reactivación de usuarios por el Administrador
   - `2a6b17f` Impide que el Administrador se desactive a sí mismo
+
+## Sesión 10: Recuperación de contraseña y restablecimiento forzado (RF-CA-09, 10, 11, 12, 13 y 14)
+- **Qué le pedí:** Implementar en la rama `feat/recuperacion-contrasena`, un commit a la vez y con propuesta previa aprobada, la entidad `CodigoRecuperacion`, la solicitud de recuperación con respuesta idéntica exista o no el correo, la generación del código, el correo por la cola, el restablecimiento con código (un solo uso, vencimiento, política de contraseña y cierre de sesiones) y el restablecimiento forzado por el Administrador.
+
+- **Qué devolvió:**
+  - `CodigoRecuperacion` (migración `CrearCodigoRecuperacion`): solo se guarda el SHA-256 del código; vence en 1 hora; `Usado`.
+  - `POST /api/auth/recuperar` (pública): valida el formato del correo (400 si está mal formado) y para cualquier correo bien formado responde el mismo 200 "Si el correo está registrado, recibirás instrucciones…". Sin retornos anticipados: el código se prepara siempre antes de buscar al usuario.
+  - Para un usuario existente y activo: código de 32 bytes Base64Url; los códigos anteriores sin usar quedan usados; el correo "Recupera tu contraseña de Tracking Tiger" se encola en la misma transacción (funciona con SMTP caído).
+  - `POST /api/auth/restablecer` (pública) con `{codigo, nuevaContrasena}`: rechaza con el mismo 400 genérico un código desconocido, usado o vencido (reloj UTC); aplica la política de contraseña antes de consumir el código (el usuario puede reintentar); en una transacción guarda el hash nuevo, marca el código usado y revoca todas las sesiones del usuario.
+  - `POST /api/usuarios/{id}/forzar-restablecimiento` (Administrador): reemplaza la contraseña por el hash de un secreto aleatorio que nadie conoce, revoca las sesiones y emite un código con la misma regla (la emisión quedó en un único método compartido).
+  - Casos de cada commit en `docs/pruebas.http` y pruebas de humo en bases desechables del scratchpad (con SMTP falso para comprobar que la operación no depende del servidor de correo).
+
+- **Dónde se equivocó:** Varias pruebas de humo automatizadas fallaron antes de ejecutarse: el control de seguridad de la herramienta bloqueó los comandos de PowerShell porque interpretó textos de las etiquetas como órdenes de borrado (la palabra "del" en "/yo del admin", una barra en "inexistente / sin activar" y un comodín `*` dentro de un filtro).
+- **Cómo lo detecté:** La herramienta rechazó cada comando con el mensaje "Remove-Item on system path … is blocked" sin llegar a ejecutar la prueba.
+- **Cómo lo corregí:** Reescribí las etiquetas sin esos caracteres y moví el filtrado de datos a consultas SQL de solo lectura en un programa auxiliar del scratchpad; luego repetí las pruebas, que pasaron.
+
+- **Commit(s):**
+  - `85c92b2` Agrega la entidad CodigoRecuperacion
+  - `1682c3c` Agrega la solicitud de recuperación de contraseña
+  - `afd05a2` Genera el código de recuperación de contraseña
+  - `3be02ae` Encola el correo con el código de recuperación
+  - `0520ebc` Agrega el restablecimiento de contraseña con código
+  - `c7af5d8` Rechaza el código de recuperación ya usado
+  - `51e921d` Rechaza el código de recuperación vencido
+  - `f717970` Revoca las sesiones al restablecer la contraseña
+  - `b2c363f` Aplica la política de contraseña al restablecer
+  - `efe90d5` Agrega el restablecimiento forzado por el Administrador
+
+## Sesión 11: Cierre de la Práctica 1 en modo autónomo (RF-CA-13, 22, 20, 08, RF-NEG-03, 04, 05, RD-03, RD-04 y README)
+- **Qué le pedí:** Que terminara solo el resto del plan antes de las 10 p. m., dejando los commits en orden para que yo los aplique (el agente no hace `git commit` ni `git push`) y un resumen fuera del repositorio.
+
+- **Qué devolvió:**
+  - Rama `feat/recuperacion-contrasena`: el restablecimiento forzado encola el correo con el código (RF-CA-13); nuevo `POST /api/auth/cambiar-contrasena` que exige la contraseña actual, aplica la política y revoca todas las sesiones (RF-CA-22, 14 y 12).
+  - Rama `fix/desactivacion-y-rol-propio`: columna `Usuarios.Desactivado` (migración `AgregarDesactivado`) para que un usuario desactivado por un Administrador no pueda reactivarse con un enlace de activación, reciba "Tu cuenta fue desactivada por un Administrador." al iniciar sesión, y para que "reactivar" nunca se salte la activación por correo (RF-CA-20); un Administrador no puede cambiar su propio rol (RF-CA-08).
+  - Rama `feat/maquina-estados-alertas`: `AlertaFraude` (migración `CrearAlertaFraude`) con 4 estados en `EstadoAlerta`; `MaquinaEstadosAlerta` como único punto de transiciones, con prohibidas explícitas (Detectada→Confirmada, Descartada→Confirmada) y estados terminales (Confirmada, Descartada); `docs/maquina-de-estados.md`; el Core aplica la configuración con `ApplyConfigurationsFromAssembly` sin nombrar el negocio (RD-03).
+  - Rama `docs/readme`: README completo (variables de entorno, ejecución, comandos, endpoints y cómo verificar cada criterio).
+  - Cada paso compilado con `skills.cmd build` (0 advertencias, 0 errores) y probado en bases desechables; un parche por commit, un script `aplicar-commits.cmd` que los aplica en orden creando las ramas, y una simulación en un clon desechable que confirmó que todos aplican limpio.
+
+- **Dónde se equivocó:**
+  - Intentó editar archivos con un script de Python, pero Python no está instalado en la máquina.
+  - Al preparar la simulación del script, las rutas de Windows con barras invertidas se corrompieron al pasarlas por `sed` y `awk`.
+  - La primera versión de `AlertaFraude` consultaba a `MaquinaEstadosAlerta` para saber si un estado era terminal: rompía el punto único de RD-04 y ese commit no habría compilado por sí solo, porque la máquina llegaba en el commit siguiente.
+  - La hora mostrada por Git Bash (01:13) no era la hora local.
+- **Cómo lo detecté:** El comando respondió "Python was not found"; la salida de la simulación mostró las rutas sin barras; la revisión del código antes de compilar mostró la dependencia; la hora se comparó con PowerShell (21:13).
+- **Cómo lo corregí:** Hizo las ediciones con la herramienta de edición; generó el script simulado con PowerShell; cambió `AplicarEstado` para que la máquina le pase la fecha de resolución (la entidad ya no decide qué estado es terminal); usó la hora de PowerShell para planificar.
+
+- **Commit(s):** se crean al ejecutar `aplicar-commits.cmd` (los identificadores aparecen al terminar el script):
+  - Encola el correo del restablecimiento forzado (RF-CA-13)
+  - Agrega el cambio de contraseña propia con sesión (RF-CA-22)
+  - Impide que un usuario desactivado se reactive por correo (RF-CA-20)
+  - Impide que el Administrador cambie su propio rol (RF-CA-08)
+  - Aplica las configuraciones de entidades sin nombrar el negocio (RD-03)
+  - Agrega la entidad AlertaFraude con sus estados (RF-NEG-03)
+  - Declara las transiciones de AlertaFraude en un solo lugar (RD-04)
+  - Documenta la tabla de transiciones de AlertaFraude (RF-NEG-05)
+  - Documenta en el README cómo ejecutar y verificar cada criterio
+  - Registra la bitácora de las sesiones 10 y 11
