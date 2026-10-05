@@ -72,7 +72,7 @@ public sealed class ServicioRecuperacionContrasena
     // RF-CA-13: un Administrador fuerza el restablecimiento. En UNA transacción: la contraseña anterior
     // deja de servir (se reemplaza por el hash de un secreto aleatorio que nadie conoce, nunca vacío),
     // se revocan TODAS las sesiones del usuario y se emite un código de recuperación con las mismas
-    // reglas. El código en claro solo vive en memoria; todavía no se envía.
+    // reglas. El código en claro solo viaja en el correo, que se encola en la misma transacción.
     public async Task<ResultadoForzarRestablecimiento> ForzarRestablecimientoAsync(int usuarioId)
     {
         await using var transaccion = await _contexto.Database.BeginTransactionAsync();
@@ -85,6 +85,14 @@ public sealed class ServicioRecuperacionContrasena
 
         var codigoPlano = GeneradorTokens.GenerarToken();
         await EmitirCodigoAsync(usuario, GeneradorTokens.CalcularHash(codigoPlano));
+
+        // El correo solo se registra en la cola (RF-NOT-08): nunca se contacta a SMTP aquí.
+        var encolado = _cola.Agregar(usuario.Correo, PlantillaCorreoRestablecimientoForzado.Asunto,
+            PlantillaCorreoRestablecimientoForzado.Cuerpo(usuario.Nombre, codigoPlano));
+        if (!encolado.Exito)
+            // No debería ocurrir (el correo ya pasó la validación del registro). Sin guardar nada, la
+            // transacción se descarta y el manejador global responde 500 sin detalles (RD-08).
+            throw new InvalidOperationException($"No se pudo encolar el correo de restablecimiento: {encolado.Mensaje}");
 
         await _contexto.SaveChangesAsync();
 

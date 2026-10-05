@@ -11,7 +11,7 @@ public sealed record ResultadoForzarRestablecimiento(EstadoForzarRestablecimient
 {
     public static ResultadoForzarRestablecimiento Forzado(UsuarioListado usuario) =>
         new(EstadoForzarRestablecimiento.Forzado,
-            "Se forzó el restablecimiento: la contraseña anterior ya no sirve, sus sesiones se cerraron y se generó un código de recuperación.",
+            "Se forzó el restablecimiento: la contraseña anterior ya no sirve, sus sesiones se cerraron y se le envió por correo un código para definir una nueva.",
             usuario);
 
     public static ResultadoForzarRestablecimiento NoEncontrado() =>

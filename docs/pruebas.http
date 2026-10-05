@@ -1219,19 +1219,22 @@ Content-Type: application/json
 ### RF-CA-13 — Restablecimiento forzado: POST /api/usuarios/{id}/forzar-restablecimiento (solo Administrador)
 ### ------------------------------------------------------------
 # Antes: token del Administrador; un usuario activo con su contraseña conocida y una sesión abierta (S1).
-# Todavía no se envía el correo con el código (llega en el siguiente paso).
+# El código se envía por la cola de correos (sin contactar SMTP durante la operación).
 
 ### 1. El Administrador fuerza el restablecimiento
 POST http://localhost:5000/api/usuarios/<id-del-usuario>/forzar-restablecimiento
 Authorization: Bearer <token-del-administrador>
 
 #   Esperado: HTTP 200 {"mensaje":"Se forzó el restablecimiento: la contraseña anterior ya no sirve, sus
-#             sesiones se cerraron y se generó un código de recuperación.","usuario":{...}}
+#             sesiones se cerraron y se le envió por correo un código para definir una nueva.","usuario":{...}}
 #   En DB Browser, en la misma transacción:
 #   - Usuarios.HashContrasena cambió (sigue empezando con "PBKDF2-SHA256$"; nunca vacío ni NULL).
 #   - CodigosRecuperacion: fila nueva con Usado = 0 y vencimiento de 1 hora; los anteriores sin usar → Usado = 1.
 #   - SesionesUsuario: todas las sesiones de ese usuario con Revocada = 1.
-#   - CorreosEnCola: todavía SIN fila nueva.
+#   - CorreosEnCola: fila nueva Pendiente para ese usuario, Asunto = "Debes definir una nueva contraseña
+#     en Tracking Tiger", con el código (43 caracteres) en el Cuerpo. Funciona aunque SMTP esté caído.
+#   Después: "dotnet run -- enviar-correos" entrega el correo; el usuario usa ese código en
+#   POST /api/auth/restablecer (RF-CA-11) y vuelve a entrar con su contraseña nueva.
 
 ### 2. Su sesión anterior deja de servir
 GET http://localhost:5000/api/auth/yo
