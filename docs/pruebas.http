@@ -169,7 +169,7 @@
 POST http://localhost:5000/api/auth/registro
 Content-Type: application/json
 
-{"nombre": "Maria Pérez", "correo": "alexabello383@gmail.com ", "contrasena": "Clave4321"}
+{"nombre": "Maria Pérez", "correo": "usuario@ejemplo.com", "contrasena": "Clave4321"}
 
 #   Esperado: HTTP 201
 #             {"mensaje":"La cuenta se creó, pero todavía no está activa. Te enviaremos un correo
@@ -422,7 +422,7 @@ GET http://localhost:5000/api/auth/activar?token=tokenQueNoExiste123
 POST http://localhost:5000/api/auth/login
 Content-Type: application/json
 
-{"correo": "alexabello383@gmail.com ", "contrasena": "Clave4321"}
+{"correo": "usuario@ejemplo", "contrasena": "Clave4321"}
 
 #   Esperado: HTTP 200 {"token":"<43 caracteres Base64Url>","venceEn":"<fecha UTC terminada en Z>"}
 #             venceEn = ahora (UTC) + 8 horas.
