@@ -76,8 +76,8 @@ public sealed class ServicioRecuperacionContrasena
         return ResultadoSolicitudRecuperacion.Aceptada();
     }
 
-    // RF-CA-11: con un código válido define la contraseña nueva. Un código desconocido o ya usado se
-    // rechaza con el mismo mensaje y sin cambiar nada. El vencimiento, la política de contraseña y el
+    // RF-CA-11: con un código válido define la contraseña nueva. Un código desconocido, ya usado o
+    // vencido se rechaza con el mismo mensaje y sin cambiar nada. La política de contraseña y el
     // cierre de sesiones llegan en pasos aparte.
     public async Task<ResultadoRestablecimiento> RestablecerAsync(string? codigo, string? nuevaContrasena)
     {
@@ -92,8 +92,9 @@ public sealed class ServicioRecuperacionContrasena
             .Include(c => c.Usuario)
             .SingleOrDefaultAsync(c => c.CodigoHash == codigoHash);
 
-        // RF-CA-10: un solo uso. Las comprobaciones van antes de cualquier cambio: un rechazo no modifica nada.
-        if (registro is null || registro.Usado)
+        // RF-CA-10: un solo uso y con vencimiento (reloj único en UTC, RD-11). Las comprobaciones van
+        // antes de cualquier cambio: un rechazo no modifica nada.
+        if (registro is null || registro.Usado || registro.FechaVencimiento < _reloj.AhoraUtc)
             return ResultadoRestablecimiento.CodigoInvalido();
 
         registro.Usuario.CambiarContrasena(_hasher.Hashear(nuevaContrasena));

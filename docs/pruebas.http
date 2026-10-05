@@ -1132,8 +1132,8 @@ Content-Type: application/json
 ### ------------------------------------------------------------
 # Antes: pedir un código con POST /api/auth/recuperar (usuario activo con contraseña "Clave1234")
 # y copiarlo del correo recibido (o del Cuerpo en CorreosEnCola).
-# Todavía se acepta un código vencido, no se aplica la política de contraseña y las sesiones
-# abiertas siguen válidas (llegan en pasos aparte).
+# Todavía no se aplica la política de contraseña y las sesiones abiertas siguen válidas
+# (llegan en pasos aparte).
 
 ### 1. Código válido
 POST http://localhost:5000/api/auth/restablecer
@@ -1180,6 +1180,19 @@ Content-Type: application/json
 #   Esperado: HTTP 400 {"mensaje":"El código no es válido, ya fue usado o venció."}
 #   La contraseña NO cambia: login con "OtraClave77" → 401; con "NuevaClave99" → 200.
 #   Lo mismo con un código anterior que quedó Usado = 1 al pedir uno nuevo.
+
+### 6. Código vencido
+#   Pedir un código nuevo (POST /api/auth/recuperar) y, en DB Browser, adelantar su vencimiento:
+#     UPDATE CodigosRecuperacion SET FechaVencimiento = '2020-01-01 00:00:00' WHERE Id = <id>;
+#   ("Escribir cambios"). Luego usarlo:
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "<código-vencido>", "nuevaContrasena": "OtraClave77"}
+
+#   Esperado: HTTP 400 {"mensaje":"El código no es válido, ya fue usado o venció."}
+#   La contraseña NO cambia y el código sigue con Usado = 0.
+#   El vencimiento se compara con IReloj.AhoraUtc (UTC), no con la hora local.
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
