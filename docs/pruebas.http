@@ -1344,6 +1344,17 @@ Content-Type: application/json
 #      ApplyConfigurationsFromAssembly sin nombrarla. Si se borra la carpeta Negocio/ el proyecto sigue compilando.
 
 ### ------------------------------------------------------------
+### RD-04 / RF-NEG-04 / RF-NEG-05 — Transiciones de AlertaFraude en un solo lugar (revisión de código)
+### ------------------------------------------------------------
+# Sin endpoints todavía (las pruebas llegan en la semana 8). Revisar Negocio/Alertas/MaquinaEstadosAlerta.cs:
+#   - Permitidas: Detectada→EnRevision; EnRevision→Confirmada; EnRevision→Descartada (estas dos exigen observación).
+#   - ProhibidasExplicitas: Detectada→Confirmada y Descartada→Confirmada, cada una con su motivo.
+#   - Terminales (EsTerminal): Confirmada y Descartada; ninguna transición parte de ellas.
+#   - IntentarTransicion rechaza todo lo demás con un mensaje en español y el estado NO cambia.
+#   - Ninguna otra clase cambia AlertaFraude.Estado (AplicarEstado es internal y solo lo llama la máquina).
+# La tabla completa está en docs/maquina-de-estados.md.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
