@@ -12,9 +12,12 @@ namespace Tracking_Tiger.Core.ControlAcceso;
 // - Sin sesión válida → 401 del esquema de sesión (mismo mensaje de siempre).
 // - Rol requerido → el rol se carga de la BASE DE DATOS en cada petición; nunca del cuerpo,
 //   de los encabezados ni del token.
+// La decisión depende SOLO de la sesión del servidor (usuario resuelto por el hash del token) y del rol
+// guardado en la base: nunca de un rol o claim enviado por el cliente en el cuerpo, la query o encabezados.
 public sealed class FiltroAutorizacionOperaciones : IAsyncAuthorizationFilter
 {
-    private const string MensajeSinPermiso = "No tienes permiso para realizar esta operación.";
+    // Operación sin declarar en el catálogo (denegar por defecto): error de configuración, mensaje corto.
+    private const string MensajeOperacionNoPermitida = "No tienes permiso para realizar esta operación.";
 
     private readonly ContextoDatos _contexto;
     private readonly ILogger<FiltroAutorizacionOperaciones> _registro;
@@ -32,7 +35,7 @@ public sealed class FiltroAutorizacionOperaciones : IAsyncAuthorizationFilter
         {
             // Error de configuración: solo al log del servidor; al cliente, el mensaje corto.
             _registro.LogWarning("Endpoint sin operación declarada en el catálogo: {Accion}", contexto.ActionDescriptor.DisplayName);
-            contexto.Result = Prohibido();
+            contexto.Result = Prohibido(MensajeOperacionNoPermitida);
             return;
         }
 
@@ -64,9 +67,15 @@ public sealed class FiltroAutorizacionOperaciones : IAsyncAuthorizationFilter
         if (rol is null)
             contexto.Result = new ChallengeResult();
         else if (rol != exigencia.RolRequerido)
-            contexto.Result = Prohibido();
+        {
+            // RF-CA-06: rechazo explícito. En el log solo el id del usuario y el nombre de la operación.
+            _registro.LogWarning("Acceso denegado: usuario {UsuarioId} sin el rol requerido para la operación {Operacion}.",
+                usuarioId, operacion.Nombre);
+            contexto.Result = Prohibido(
+                $"No tienes permiso para ejecutar esta operación. Se requiere el rol {exigencia.RolRequerido!.Value.NombreVisible()}.");
+        }
     }
 
-    private static ObjectResult Prohibido() =>
-        new(new { mensaje = MensajeSinPermiso }) { StatusCode = StatusCodes.Status403Forbidden };
+    private static ObjectResult Prohibido(string mensaje) =>
+        new(new { mensaje }) { StatusCode = StatusCodes.Status403Forbidden };
 }

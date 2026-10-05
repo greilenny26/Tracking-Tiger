@@ -775,7 +775,7 @@ Content-Type: application/json
 # 3) Denegar por defecto y exigencia de rol: todavía no hay endpoints de Administrador ni endpoints
 #    fuera del catálogo, así que no se pueden provocar desde fuera. Cuando exista la primera
 #    operación de Administrador: un usuario Estándar recibe HTTP 403
-#    {"mensaje":"No tienes permiso para realizar esta operación."}; el rol se lee de la base
+#    {"mensaje":"No tienes permiso para ejecutar esta operación. Se requiere el rol Administrador."}; el rol se lee de la base
 #    en cada petición, nunca del cuerpo, encabezados ni token.
 
 ### ------------------------------------------------------------
@@ -797,7 +797,7 @@ Authorization: Bearer <token-del-administrador>
 GET http://localhost:5000/api/usuarios
 Authorization: Bearer <token-de-un-estándar>
 
-#   Esperado: HTTP 403 {"mensaje":"No tienes permiso para realizar esta operación."}
+#   Esperado: HTTP 403 {"mensaje":"No tienes permiso para ejecutar esta operación. Se requiere el rol Administrador."}
 
 ### 3. Sin sesión
 GET http://localhost:5000/api/usuarios
@@ -811,6 +811,48 @@ Rol: Administrador
 X-Rol: Administrador
 
 #   Esperado: HTTP 403 igual que el caso 2 (el rol se lee de la base, nunca de la petición).
+
+### ------------------------------------------------------------
+### RF-CA-06 — Rechazo explícito por rol (peticiones construidas a mano)
+### ------------------------------------------------------------
+# La decisión depende SOLO de la sesión del servidor y del rol guardado en la base. Se ignora
+# cualquier rol o claim enviado por el cliente (cuerpo, query string o encabezados).
+# Antes: token de un usuario Estándar activo y token del Administrador (caso RF-CA-04 crear-admin).
+
+### 1. Sesión Estándar
+GET http://localhost:5000/api/usuarios
+Authorization: Bearer <token-de-un-estándar>
+
+#   Esperado: HTTP 403 {"mensaje":"No tienes permiso para ejecutar esta operación. Se requiere el rol Administrador."}
+#   En la consola del servidor: "Acceso denegado: usuario <id> sin el rol requerido para la operación
+#   listar-usuarios." (solo id y operación; nunca correo, token, encabezados ni cuerpo).
+
+### 2. Sesión Estándar + encabezado "X-Rol: Administrador"
+GET http://localhost:5000/api/usuarios
+Authorization: Bearer <token-de-un-estándar>
+X-Rol: Administrador
+
+#   Esperado: el mismo HTTP 403 del caso 1. El encabezado se ignora.
+
+### 3. Sesión Estándar + "?rol=Administrador"
+GET http://localhost:5000/api/usuarios?rol=Administrador
+Authorization: Bearer <token-de-un-estándar>
+
+#   Esperado: el mismo HTTP 403 del caso 1. El parámetro se ignora.
+
+### 4. Sin sesión (con o sin esos extras)
+GET http://localhost:5000/api/usuarios?rol=Administrador
+X-Rol: Administrador
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}. Sin línea "Acceso denegado" en la
+#   consola (ese registro es solo para usuarios autenticados sin el rol).
+
+### 5. Administrador con las mismas peticiones
+GET http://localhost:5000/api/usuarios?rol=Estandar
+Authorization: Bearer <token-del-administrador>
+X-Rol: Estandar
+
+#   Esperado: HTTP 200 con el listado: tampoco un rol "más bajo" enviado por el cliente cambia nada.
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
