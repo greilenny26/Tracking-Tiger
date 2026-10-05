@@ -917,6 +917,15 @@ Content-Type: application/json
 
 #   Esperado: el mismo HTTP 403; en DB Browser su Rol sigue en 'Estandar'.
 
+### 8. El Administrador intenta cambiar su propio rol
+PUT http://localhost:5000/api/usuarios/<id-del-propio-administrador>/rol
+Authorization: Bearer <token-del-administrador>
+Content-Type: application/json
+
+{"rol": "Estandar"}
+
+#   Esperado: HTTP 400 {"mensaje":"No puedes cambiar tu propio rol."}; su Rol sigue en 'Administrador'.
+
 ### 7. Sin sesión
 PUT http://localhost:5000/api/usuarios/<id>/rol
 Content-Type: application/json

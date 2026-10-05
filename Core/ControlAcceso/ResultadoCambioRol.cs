@@ -4,7 +4,8 @@ public enum EstadoCambioRol
 {
     Cambiado,
     RolInvalido,
-    NoEncontrado
+    NoEncontrado,
+    PropioUsuario
 }
 
 // Resultado de cambiar el rol de un usuario (RF-CA-08).
@@ -18,4 +19,8 @@ public sealed record ResultadoCambioRol(EstadoCambioRol Estado, string Mensaje, 
 
     public static ResultadoCambioRol NoEncontrado() =>
         new(EstadoCambioRol.NoEncontrado, "No existe un usuario con ese id.", null);
+
+    // Plan aprobado: un Administrador no puede cambiar su propio rol (evita quedarse sin Administradores).
+    public static ResultadoCambioRol PropioUsuario() =>
+        new(EstadoCambioRol.PropioUsuario, "No puedes cambiar tu propio rol.", null);
 }

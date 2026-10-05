@@ -23,12 +23,17 @@ public sealed class ControladorUsuarios : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Listar() => Ok(await _servicio.ListarAsync());
 
-    // RF-CA-08: 200 con el usuario actualizado, 400 si el rol no es válido, 404 si el id no existe.
+    // RF-CA-08: 200 con el usuario actualizado, 400 si el rol no es válido o es el propio usuario,
+    // 404 si el id no existe.
     [Operacion(CatalogoOperaciones.CambiarRol)]
     [HttpPut("{id:int}/rol")]
     public async Task<IActionResult> CambiarRol(int id, [FromBody] SolicitudCambioRol solicitud)
     {
-        var resultado = await _servicio.CambiarRolAsync(id, solicitud.Rol);
+        // El filtro ya garantizó una sesión válida; el id sale de esa sesión (claim del servidor).
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var idSolicitante))
+            return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
+
+        var resultado = await _servicio.CambiarRolAsync(id, solicitud.Rol, idSolicitante);
 
         return resultado.Estado switch
         {
