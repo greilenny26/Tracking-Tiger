@@ -1335,6 +1335,15 @@ Content-Type: application/json
 #   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
 
 ### ------------------------------------------------------------
+### RF-NEG-03 / RD-03 — Entidad central del negocio: AlertaFraude (revisión y base de datos)
+### ------------------------------------------------------------
+#   1) Estados en un solo lugar: Negocio/Alertas/EstadoAlerta.cs (Detectada, EnRevision, Confirmada, Descartada).
+#   2) En DB Browser (tras "dotnet run"): tabla AlertasFraude con Id, NumeroTarjetaEnmascarado, Monto, Comercio,
+#      FechaTransaccion, NivelRiesgo, Estado (texto), FechaCreacion, FechaResolucion, Observacion.
+#   3) RD-03: "grep -rn Negocio Core/" no devuelve nada; el Core registra la entidad con
+#      ApplyConfigurationsFromAssembly sin nombrarla. Si se borra la carpeta Negocio/ el proyecto sigue compilando.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
