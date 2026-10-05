@@ -13,6 +13,7 @@ public static class CatalogoOperaciones
     public const string ConsultarUsuarioActual = "yo";
     public const string CerrarSesion = "logout";
     public const string SolicitarRecuperacion = "recuperar";
+    public const string Restablecer = "restablecer";
     public const string ListarUsuarios = "listar-usuarios";
     public const string CambiarRol = "cambiar-rol";
     public const string DesactivarUsuario = "desactivar-usuario";
@@ -27,6 +28,7 @@ public static class CatalogoOperaciones
         [ConsultarUsuarioActual] = ExigenciaAcceso.Autenticada,
         [CerrarSesion]           = ExigenciaAcceso.Autenticada,
         [SolicitarRecuperacion]  = ExigenciaAcceso.Publica,
+        [Restablecer]            = ExigenciaAcceso.Publica,
         [ListarUsuarios]         = ExigenciaAcceso.DeRol(Rol.Administrador),
         [CambiarRol]             = ExigenciaAcceso.DeRol(Rol.Administrador),
         [DesactivarUsuario]      = ExigenciaAcceso.DeRol(Rol.Administrador),

@@ -13,14 +13,16 @@ public sealed class ServicioRecuperacionContrasena
     private readonly ContextoDatos _contexto;
     private readonly IReloj _reloj;
     private readonly IColaCorreo _cola;
+    private readonly IHasherContrasenas _hasher;
     private readonly ILogger<ServicioRecuperacionContrasena> _registro;
 
     public ServicioRecuperacionContrasena(ContextoDatos contexto, IReloj reloj, IColaCorreo cola,
-        ILogger<ServicioRecuperacionContrasena> registro)
+        IHasherContrasenas hasher, ILogger<ServicioRecuperacionContrasena> registro)
     {
         _contexto = contexto;
         _reloj = reloj;
         _cola = cola;
+        _hasher = hasher;
         _registro = registro;
     }
 
@@ -72,5 +74,33 @@ public sealed class ServicioRecuperacionContrasena
         }
 
         return ResultadoSolicitudRecuperacion.Aceptada();
+    }
+
+    // RF-CA-11: con un código válido define la contraseña nueva. Por ahora solo el camino feliz:
+    // las comprobaciones de código usado y vencido, la política de contraseña y el cierre de sesiones
+    // llegan en pasos aparte.
+    public async Task<ResultadoRestablecimiento> RestablecerAsync(string? codigo, string? nuevaContrasena)
+    {
+        if (string.IsNullOrWhiteSpace(codigo))
+            return ResultadoRestablecimiento.CodigoInvalido();
+        if (string.IsNullOrEmpty(nuevaContrasena))
+            return ResultadoRestablecimiento.DatosInvalidos("La contraseña nueva es obligatoria.");
+
+        // En la base solo está el hash: se busca por el SHA-256 del código recibido.
+        var codigoHash = GeneradorTokens.CalcularHash(codigo.Trim());
+        var registro = await _contexto.CodigosRecuperacion
+            .Include(c => c.Usuario)
+            .SingleOrDefaultAsync(c => c.CodigoHash == codigoHash);
+
+        if (registro is null)
+            return ResultadoRestablecimiento.CodigoInvalido();
+
+        registro.Usuario.CambiarContrasena(_hasher.Hashear(nuevaContrasena));
+        registro.MarcarUsado();
+
+        // Un solo SaveChanges = una sola transacción: contraseña nueva y código usado, o nada.
+        await _contexto.SaveChangesAsync();
+
+        return ResultadoRestablecimiento.Restablecida();
     }
 }

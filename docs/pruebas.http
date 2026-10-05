@@ -1128,6 +1128,50 @@ Content-Type: application/json
 #   En ningún caso el código aparece en la respuesta HTTP ni en la consola del servidor.
 
 ### ------------------------------------------------------------
+### RF-CA-11 — Restablecer la contraseña: POST /api/auth/restablecer (pública)
+### ------------------------------------------------------------
+# Antes: pedir un código con POST /api/auth/recuperar (usuario activo con contraseña "Clave1234")
+# y copiarlo del correo recibido (o del Cuerpo en CorreosEnCola).
+# Por ahora solo el camino feliz: todavía se aceptan un código ya usado o vencido, no se aplica
+# la política de contraseña y las sesiones abiertas siguen válidas (llegan en pasos aparte).
+
+### 1. Código válido
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "<código-del-correo>", "nuevaContrasena": "NuevaClave99"}
+
+#   Esperado: HTTP 200 {"mensaje":"Tu contraseña se actualizó. Ya puedes iniciar sesión con la nueva."}
+#   En DB Browser, en la misma transacción: ese código con Usado = 1 y Usuarios.HashContrasena
+#   distinto al anterior (sigue empezando con "PBKDF2-SHA256$").
+
+### 2. La contraseña anterior deja de servir; la nueva funciona
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-del-usuario>", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."}
+#   Con "contrasena": "NuevaClave99" → HTTP 200 con token.
+
+### 3. Código desconocido
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "codigoQueNoExiste123", "nuevaContrasena": "NuevaClave99"}
+
+#   Esperado: HTTP 400 {"mensaje":"El código no es válido, ya fue usado o venció."}
+#   Igual con "codigo": "" o sin el campo. La contraseña no cambia.
+
+### 4. Contraseña nueva vacía o ausente
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "<código>", "nuevaContrasena": ""}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña nueva es obligatoria."}. El código no se marca como usado.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

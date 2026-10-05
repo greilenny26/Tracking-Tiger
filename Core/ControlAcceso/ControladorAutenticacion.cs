@@ -137,4 +137,16 @@ public sealed class ControladorAutenticacion : ControllerBase
             ? Ok(new { mensaje = resultado.Mensaje })
             : BadRequest(new { mensaje = resultado.Mensaje });
     }
+
+    // RF-CA-11: 200 si la contraseña se actualizó; 400 si el código no sirve o faltan datos.
+    [Operacion(CatalogoOperaciones.Restablecer)]
+    [HttpPost("restablecer")]
+    public async Task<IActionResult> Restablecer([FromBody] SolicitudRestablecimiento solicitud)
+    {
+        var resultado = await _servicioRecuperacion.RestablecerAsync(solicitud.Codigo, solicitud.NuevaContrasena);
+
+        return resultado.Estado == EstadoRestablecimiento.Restablecida
+            ? Ok(new { mensaje = resultado.Mensaje })
+            : BadRequest(new { mensaje = resultado.Mensaje });
+    }
 }
