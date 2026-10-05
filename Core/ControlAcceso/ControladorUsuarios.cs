@@ -19,4 +19,19 @@ public sealed class ControladorUsuarios : ControllerBase
     [Operacion(CatalogoOperaciones.ListarUsuarios)]
     [HttpGet]
     public async Task<IActionResult> Listar() => Ok(await _servicio.ListarAsync());
+
+    // RF-CA-08: 200 con el usuario actualizado, 400 si el rol no es válido, 404 si el id no existe.
+    [Operacion(CatalogoOperaciones.CambiarRol)]
+    [HttpPut("{id:int}/rol")]
+    public async Task<IActionResult> CambiarRol(int id, [FromBody] SolicitudCambioRol solicitud)
+    {
+        var resultado = await _servicio.CambiarRolAsync(id, solicitud.Rol);
+
+        return resultado.Estado switch
+        {
+            EstadoCambioRol.Cambiado => Ok(resultado.Usuario),
+            EstadoCambioRol.NoEncontrado => NotFound(new { mensaje = resultado.Mensaje }),
+            _ => BadRequest(new { mensaje = resultado.Mensaje })
+        };
+    }
 }

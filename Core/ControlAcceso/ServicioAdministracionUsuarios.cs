@@ -3,7 +3,7 @@ using Tracking_Tiger.Core.Persistencia;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
 
-// Operaciones del Administrador sobre los usuarios (RF-CA-21). Quién puede ejecutarlas
+// Operaciones del Administrador sobre los usuarios (RF-CA-21, RF-CA-08). Quién puede ejecutarlas
 // lo decide CatalogoOperaciones; aquí solo vive la lógica (RD-02).
 public sealed class ServicioAdministracionUsuarios
 {
@@ -28,5 +28,31 @@ public sealed class ServicioAdministracionUsuarios
         return filas
             .Select(f => new UsuarioListado(f.Id, f.Nombre, f.Correo, f.Rol.ToString(), f.Activo))
             .ToList();
+    }
+
+    // RF-CA-08: cambia el rol de un usuario. Surte efecto en la siguiente petición de ese usuario,
+    // porque FiltroAutorizacionOperaciones lee el rol de la base en cada petición.
+    public async Task<ResultadoCambioRol> CambiarRolAsync(int usuarioId, string? rolSolicitado)
+    {
+        if (string.IsNullOrWhiteSpace(rolSolicitado))
+            return ResultadoCambioRol.RolInvalido("El rol es obligatorio.");
+
+        // Solo los nombres declarados en Rol (sin distinguir mayúsculas). No se aceptan números
+        // ("0", "1") ni valores fuera del enum, que Enum.TryParse sí aceptaría.
+        var nombre = Enum.GetNames<Rol>()
+            .FirstOrDefault(n => n.Equals(rolSolicitado.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (nombre is null)
+            return ResultadoCambioRol.RolInvalido(
+                $"El rol no es válido. Valores permitidos: {string.Join(", ", Enum.GetNames<Rol>())}.");
+
+        var usuario = await _contexto.Usuarios.SingleOrDefaultAsync(u => u.Id == usuarioId);
+        if (usuario is null)
+            return ResultadoCambioRol.NoEncontrado();
+
+        usuario.CambiarRol(Enum.Parse<Rol>(nombre));
+        await _contexto.SaveChangesAsync();
+
+        return ResultadoCambioRol.Cambiado(new UsuarioListado(
+            usuario.Id, usuario.Nombre, usuario.Correo, usuario.Rol.ToString(), usuario.Activo));
     }
 }

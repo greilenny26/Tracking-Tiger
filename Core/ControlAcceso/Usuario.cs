@@ -44,6 +44,10 @@ public class Usuario
     // Activa la cuenta al abrir el enlace de activación (RF-CA-16).
     public void Activar() => Activo = true;
 
+    // Cambio de rol (RF-CA-08): solo lo invoca ServicioAdministracionUsuarios, en una operación
+    // que el catálogo reserva al Administrador.
+    public void CambiarRol(Rol nuevoRol) => Rol = nuevoRol;
+
     // Regla de dominio (RF-CA-15): un usuario nuevo SIEMPRE nace inactivo.
     // RF-CA-04: un usuario nuevo SIEMPRE nace Estándar; el rol nunca se toma de la petición.
     // El correo se normaliza al asignarlo; el hash ya debe venir calculado.

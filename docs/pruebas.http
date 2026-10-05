@@ -855,6 +855,77 @@ X-Rol: Estandar
 #   Esperado: HTTP 200 con el listado: tampoco un rol "más bajo" enviado por el cliente cambia nada.
 
 ### ------------------------------------------------------------
+### RF-CA-08 — Cambio de rol: PUT /api/usuarios/{id}/rol (solo Administrador)
+### ------------------------------------------------------------
+# Antes: token del Administrador y token de un usuario Estándar activo (ver su id en GET /api/usuarios).
+
+### 1. El Administrador promueve a un Estándar
+PUT http://localhost:5000/api/usuarios/<id-del-estándar>/rol
+Authorization: Bearer <token-del-administrador>
+Content-Type: application/json
+
+{"rol": "Administrador"}
+
+#   Esperado: HTTP 200 {"id":<id>,"nombre":"...","correo":"...","rol":"Administrador","activo":true}
+#   Efecto inmediato: ese usuario, con su MISMO token (sin volver a iniciar sesión), hace
+#   GET /api/usuarios → HTTP 200.
+
+### 2. El Administrador lo devuelve a Estándar
+PUT http://localhost:5000/api/usuarios/<id-del-estándar>/rol
+Authorization: Bearer <token-del-administrador>
+Content-Type: application/json
+
+{"rol": "Estandar"}
+
+#   Esperado: HTTP 200 con "rol":"Estandar". Su siguiente GET /api/usuarios → HTTP 403.
+
+### 3. Valores de rol no válidos
+PUT http://localhost:5000/api/usuarios/<id-del-estándar>/rol
+Authorization: Bearer <token-del-administrador>
+Content-Type: application/json
+
+{"rol": "Superusuario"}
+
+#   Esperado: HTTP 400 {"mensaje":"El rol no es válido. Valores permitidos: Administrador, Estandar."}
+#   Igual con {"rol":"1"} o {"rol":"0"}. Con {"rol":""} o {} → HTTP 400 {"mensaje":"El rol es obligatorio."}
+#   "administrador" en minúsculas SÍ se acepta. En todos los rechazos el rol no cambia.
+
+### 4. Id inexistente
+PUT http://localhost:5000/api/usuarios/99999/rol
+Authorization: Bearer <token-del-administrador>
+Content-Type: application/json
+
+{"rol": "Administrador"}
+
+#   Esperado: HTTP 404 {"mensaje":"No existe un usuario con ese id."}
+
+### 5. Un Estándar intenta cambiar el rol de otro usuario
+PUT http://localhost:5000/api/usuarios/<id-de-otro-usuario>/rol
+Authorization: Bearer <token-de-un-estándar>
+Content-Type: application/json
+
+{"rol": "Estandar"}
+
+#   Esperado: HTTP 403 {"mensaje":"No tienes permiso para ejecutar esta operación. Se requiere el rol Administrador."}
+
+### 6. Un Estándar intenta hacerse Administrador a sí mismo
+PUT http://localhost:5000/api/usuarios/<su-propio-id>/rol
+Authorization: Bearer <token-de-un-estándar>
+Content-Type: application/json
+
+{"rol": "Administrador"}
+
+#   Esperado: el mismo HTTP 403; en DB Browser su Rol sigue en 'Estandar'.
+
+### 7. Sin sesión
+PUT http://localhost:5000/api/usuarios/<id>/rol
+Content-Type: application/json
+
+{"rol": "Administrador"}
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
