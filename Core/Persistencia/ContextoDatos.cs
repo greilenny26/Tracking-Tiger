@@ -20,6 +20,11 @@ public class ContextoDatos : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // RD-03: el módulo de negocio registra sus entidades con su propia IEntityTypeConfiguration<T>.
+        // El Core las aplica sin nombrarlas: si se elimina el negocio, el Core sigue compilando y ejecutándose.
+        // El negocio lee y escribe sus entidades con contexto.Set<T>().
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(ContextoDatos).Assembly);
+
         modelBuilder.Entity<CorreoEnCola>(correo =>
         {
             correo.ToTable("CorreosEnCola");
