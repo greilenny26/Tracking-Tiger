@@ -1,21 +1,27 @@
 using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.Comun;
+using Tracking_Tiger.Core.Correo;
 using Tracking_Tiger.Core.Persistencia;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
 
 // Recuperación de contraseña (RF-CA-09, RF-CA-10). Toda la regla vive aquí, no en el controlador (RD-02).
 // Un correo mal formado se rechaza (no revela nada); cualquier correo bien formado recibe la misma
-// respuesta, exista o no. Genera el código pero todavía no lo envía. Nunca se registran correos ni códigos.
+// respuesta, exista o no. Genera el código y encola el correo con él. Nunca se registran correos ni códigos.
 public sealed class ServicioRecuperacionContrasena
 {
     private readonly ContextoDatos _contexto;
     private readonly IReloj _reloj;
+    private readonly IColaCorreo _cola;
+    private readonly ILogger<ServicioRecuperacionContrasena> _registro;
 
-    public ServicioRecuperacionContrasena(ContextoDatos contexto, IReloj reloj)
+    public ServicioRecuperacionContrasena(ContextoDatos contexto, IReloj reloj, IColaCorreo cola,
+        ILogger<ServicioRecuperacionContrasena> registro)
     {
         _contexto = contexto;
         _reloj = reloj;
+        _cola = cola;
+        _registro = registro;
     }
 
     public async Task<ResultadoSolicitudRecuperacion> SolicitarAsync(string? correo)
@@ -46,8 +52,23 @@ public sealed class ServicioRecuperacionContrasena
 
             _contexto.CodigosRecuperacion.Add(CodigoRecuperacion.Emitir(usuario, codigoHash, _reloj.AhoraUtc));
 
-            // Un solo SaveChanges = una sola transacción: códigos anteriores marcados y código nuevo, o nada.
-            await _contexto.SaveChangesAsync();
+            // El correo solo se registra en la cola (RF-NOT-08): nunca se contacta a SMTP aquí y la
+            // operación termina bien aunque el servidor de correo esté caído. Lo envía "enviar-correos".
+            var encolado = _cola.Agregar(usuario.Correo, PlantillaCorreoRecuperacion.Asunto,
+                PlantillaCorreoRecuperacion.Cuerpo(usuario.Nombre, codigoPlano));
+
+            if (encolado.Exito)
+            {
+                // Un solo SaveChanges = una sola transacción: códigos anteriores marcados, código nuevo
+                // y correo en la cola, o nada.
+                await _contexto.SaveChangesAsync();
+            }
+            else
+            {
+                // Solo queda en el log del servidor (sin código ni correo); al cliente le llega la respuesta de siempre.
+                _contexto.ChangeTracker.Clear();
+                _registro.LogError("No se pudo encolar el correo de recuperación: {Motivo}", encolado.Mensaje);
+            }
         }
 
         return ResultadoSolicitudRecuperacion.Aceptada();

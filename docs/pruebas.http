@@ -1081,8 +1081,7 @@ Content-Type: application/json
 ### RF-CA-10 — Generar el código de recuperación (sin envío todavía)
 ### ------------------------------------------------------------
 # Todas las respuestas son el mismo HTTP 200 de RF-CA-09; solo cambia lo que pasa en la base.
-# Todavía no se encola ningún correo (CorreosEnCola no cambia) y el código en claro no aparece
-# en la respuesta ni en la consola del servidor.
+# El código en claro no aparece en la respuesta ni en la consola del servidor.
 
 ### 1. Usuario existente y ACTIVO
 POST http://localhost:5000/api/auth/recuperar
@@ -1106,6 +1105,27 @@ Content-Type: application/json
 
 #   Esperado: el mismo HTTP 200 y NINGUNA fila nueva en CodigosRecuperacion.
 #   Igual con el correo de una cuenta sin activar o de una cuenta desactivada.
+
+### ------------------------------------------------------------
+### RF-CA-10 — Correo de recuperación en la cola (sin contactar SMTP)
+### ------------------------------------------------------------
+#   1) Usuario ACTIVO, con SMTP caído o sin configurar: en una terminal con
+#      "set SMTP_HOST=localhost" y "set SMTP_PORT=2599" (o sin variables SMTP), ejecutar "dotnet run"
+#      y repetir el caso 1 de RF-CA-10 (generar código).
+#   Esperado: el mismo HTTP 200 de inmediato (no intenta conectarse a SMTP). En DB Browser, en la
+#             misma transacción que el código:
+#             - CorreosEnCola: fila nueva con Destinatario = correo del usuario,
+#               Asunto = "Recupera tu contraseña de Tracking Tiger", Estado = Pendiente, Intentos = 0.
+#             - El Cuerpo incluye el código (43 caracteres) e indica usar POST /api/auth/restablecer.
+#             - SHA-256 del código del correo = CodigoHash de la fila nueva de CodigosRecuperacion.
+#
+#   2) Correo inexistente, cuenta sin activar o cuenta desactivada:
+#   Esperado: el mismo HTTP 200 y NINGUNA fila nueva en CorreosEnCola.
+#
+#   3) Envío posterior con el proceso aparte (call .env.cmd; dotnet run -- enviar-correos):
+#   Esperado: el correo llega con el código y la fila pasa a Enviado.
+#
+#   En ningún caso el código aparece en la respuesta HTTP ni en la consola del servidor.
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
