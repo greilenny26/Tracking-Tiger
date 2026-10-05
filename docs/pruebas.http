@@ -926,6 +926,53 @@ Content-Type: application/json
 #   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
 
 ### ------------------------------------------------------------
+### RF-CA-20 — Desactivar usuario: POST /api/usuarios/{id}/desactivar (solo Administrador)
+### ------------------------------------------------------------
+# Antes: token del Administrador; un usuario Estándar activo que inicia sesión DOS veces (tokens A1 y A2).
+# Pendiente para el siguiente commit: hoy un usuario desactivado podría pedir un nuevo enlace de
+# activación (reenviar-activacion) y reactivarse; también el mensaje del login dice "Revisa tu correo".
+
+### 1. El Administrador desactiva al usuario
+POST http://localhost:5000/api/usuarios/<id-del-usuario>/desactivar
+Authorization: Bearer <token-del-administrador>
+
+#   Esperado: HTTP 200 {"mensaje":"Usuario desactivado. Sus sesiones abiertas se cerraron.",
+#             "usuario":{"id":<id>,...,"activo":false}}
+#   En DB Browser, en la misma transacción: Usuarios.Activo = 0 y TODAS sus filas de
+#   SesionesUsuario con Revocada = 1.
+
+### 2. Sus credenciales dejan de servir
+GET http://localhost:5000/api/auth/yo
+Authorization: Bearer <token-A1>
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}. Igual con A2.
+
+### 3. No puede iniciar sesión
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-del-usuario>", "contrasena": "<su-contraseña-correcta>"}
+
+#   Esperado: HTTP 403 (cuenta no activa); no se crea ninguna sesión.
+
+### 4. Id inexistente
+POST http://localhost:5000/api/usuarios/99999/desactivar
+Authorization: Bearer <token-del-administrador>
+
+#   Esperado: HTTP 404 {"mensaje":"No existe un usuario con ese id."}
+
+### 5. Un Estándar intenta desactivar a alguien
+POST http://localhost:5000/api/usuarios/<id-de-otro-usuario>/desactivar
+Authorization: Bearer <token-de-un-estándar>
+
+#   Esperado: HTTP 403 {"mensaje":"No tienes permiso para ejecutar esta operación. Se requiere el rol Administrador."}
+
+### 6. Sin sesión
+POST http://localhost:5000/api/usuarios/<id>/desactivar
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

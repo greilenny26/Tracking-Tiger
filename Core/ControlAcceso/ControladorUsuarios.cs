@@ -34,4 +34,16 @@ public sealed class ControladorUsuarios : ControllerBase
             _ => BadRequest(new { mensaje = resultado.Mensaje })
         };
     }
+
+    // RF-CA-20: 200 con el usuario desactivado, 404 si el id no existe.
+    [Operacion(CatalogoOperaciones.DesactivarUsuario)]
+    [HttpPost("{id:int}/desactivar")]
+    public async Task<IActionResult> Desactivar(int id)
+    {
+        var resultado = await _servicio.DesactivarAsync(id);
+
+        return resultado.Estado == EstadoDesactivacion.Desactivado
+            ? Ok(new { mensaje = resultado.Mensaje, usuario = resultado.Usuario })
+            : NotFound(new { mensaje = resultado.Mensaje });
+    }
 }

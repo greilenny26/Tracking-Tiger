@@ -3,7 +3,7 @@ using Tracking_Tiger.Core.Persistencia;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
 
-// Operaciones del Administrador sobre los usuarios (RF-CA-21, RF-CA-08). Quién puede ejecutarlas
+// Operaciones del Administrador sobre los usuarios (RF-CA-21, RF-CA-08, RF-CA-20). Quién puede ejecutarlas
 // lo decide CatalogoOperaciones; aquí solo vive la lógica (RD-02).
 public sealed class ServicioAdministracionUsuarios
 {
@@ -53,6 +53,30 @@ public sealed class ServicioAdministracionUsuarios
         await _contexto.SaveChangesAsync();
 
         return ResultadoCambioRol.Cambiado(new UsuarioListado(
+            usuario.Id, usuario.Nombre, usuario.Correo, usuario.Rol.ToString(), usuario.Activo));
+    }
+
+    // RF-CA-20: desactiva al usuario y revoca TODAS sus sesiones abiertas en una sola transacción:
+    // o quedan ambas cosas o ninguna. Desde la siguiente petición sus credenciales dejan de servir
+    // (el esquema de sesión rechaza sesiones revocadas y usuarios inactivos) y no puede iniciar sesión.
+    public async Task<ResultadoDesactivacion> DesactivarAsync(int usuarioId)
+    {
+        await using var transaccion = await _contexto.Database.BeginTransactionAsync();
+
+        var usuario = await _contexto.Usuarios.SingleOrDefaultAsync(u => u.Id == usuarioId);
+        if (usuario is null)
+            return ResultadoDesactivacion.NoEncontrado();
+
+        usuario.Desactivar();
+        await _contexto.SaveChangesAsync();
+
+        await _contexto.SesionesUsuario
+            .Where(s => s.UsuarioId == usuarioId && !s.Revocada)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Revocada, true));
+
+        await transaccion.CommitAsync();
+
+        return ResultadoDesactivacion.Desactivado(new UsuarioListado(
             usuario.Id, usuario.Nombre, usuario.Correo, usuario.Rol.ToString(), usuario.Activo));
     }
 }

@@ -44,6 +44,10 @@ public class Usuario
     // Activa la cuenta al abrir el enlace de activación (RF-CA-16).
     public void Activar() => Activo = true;
 
+    // Desactivación por el Administrador (RF-CA-20). La revocación de sesiones la hace el servicio
+    // en la misma transacción.
+    public void Desactivar() => Activo = false;
+
     // Cambio de rol (RF-CA-08): solo lo invoca ServicioAdministracionUsuarios, en una operación
     // que el catálogo reserva al Administrador.
     public void CambiarRol(Rol nuevoRol) => Rol = nuevoRol;
