@@ -1,10 +1,10 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
 
 // Endpoints de autenticación. Solo traducen HTTP ↔ servicio; las reglas viven en los servicios (RD-02).
+// Quién puede ejecutar cada acción se declara en CatalogoOperaciones (RF-CA-05), nunca aquí.
 [ApiController]
 [Route("api/auth")]
 public sealed class ControladorAutenticacion : ControllerBase
@@ -26,6 +26,7 @@ public sealed class ControladorAutenticacion : ControllerBase
     // RF-CA-01: 201 con los datos públicos del usuario, 400 si los datos no son válidos,
     // 409 si el correo ya está registrado, 503 si falta configuración del servidor.
     // La respuesta nunca incluye el hash ni el token de activación.
+    [Operacion(CatalogoOperaciones.Registro)]
     [HttpPost("registro")]
     public async Task<IActionResult> Registrar([FromBody] SolicitudRegistro solicitud)
     {
@@ -48,6 +49,7 @@ public sealed class ControladorAutenticacion : ControllerBase
     }
 
     // RF-CA-16: 200 si la cuenta se activó, 400 con mensaje genérico si el enlace no es válido.
+    [Operacion(CatalogoOperaciones.Activar)]
     [HttpGet("activar")]
     public async Task<IActionResult> Activar([FromQuery] string? token)
     {
@@ -60,6 +62,7 @@ public sealed class ControladorAutenticacion : ControllerBase
 
     // RF-CA-17: 200 con la misma respuesta exista o no el correo, 400 solo si el correo no tiene
     // formato válido, 503 si falta configuración del servidor.
+    [Operacion(CatalogoOperaciones.ReenviarActivacion)]
     [HttpPost("reenviar-activacion")]
     public async Task<IActionResult> ReenviarActivacion([FromBody] SolicitudReenvioActivacion solicitud)
     {
@@ -78,6 +81,7 @@ public sealed class ControladorAutenticacion : ControllerBase
     // 429 mientras la cuenta está bloqueada por intentos fallidos (RF-CA-19),
     // 401 con el mismo mensaje ante cualquier otra falla.
     // El token en claro solo aparece en esta respuesta.
+    [Operacion(CatalogoOperaciones.IniciarSesion)]
     [HttpPost("login")]
     public async Task<IActionResult> IniciarSesion([FromBody] SolicitudInicioSesion solicitud)
     {
@@ -94,7 +98,7 @@ public sealed class ControladorAutenticacion : ControllerBase
     }
 
     // RF-CA-07: datos del usuario autenticado. Sin credencial válida, el esquema de sesión responde 401.
-    [Authorize]
+    [Operacion(CatalogoOperaciones.ConsultarUsuarioActual)]
     [HttpGet("yo")]
     public async Task<IActionResult> ObtenerUsuarioActual()
     {
@@ -104,11 +108,11 @@ public sealed class ControladorAutenticacion : ControllerBase
         var usuario = await _servicioSesion.ObtenerUsuarioActualAsync(usuarioId);
         return usuario is null
             ? Unauthorized(new { mensaje = "Sesión no válida o vencida." })
-            : Ok(new { id = usuario.Id, nombre = usuario.Nombre, correo = usuario.Correo });
+            : Ok(new { id = usuario.Id, nombre = usuario.Nombre, correo = usuario.Correo, rol = usuario.Rol.ToString() });
     }
 
     // RF-CA-18: cierra la sesión actual. Sin sesión válida, el esquema responde 401 antes de llegar aquí.
-    [Authorize]
+    [Operacion(CatalogoOperaciones.CerrarSesion)]
     [HttpPost("logout")]
     public async Task<IActionResult> CerrarSesion()
     {

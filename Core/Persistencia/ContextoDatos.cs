@@ -43,6 +43,8 @@ public class ContextoDatos : DbContext
             usuario.Property(u => u.Activo).IsRequired();
             usuario.Property(u => u.IntentosFallidos).IsRequired().HasDefaultValue(0);
             usuario.Property(u => u.BloqueadoHasta);
+            // RF-CA-04: se guarda como texto ("Administrador" / "Estandar"), legible en DB Browser.
+            usuario.Property(u => u.Rol).IsRequired().HasConversion<string>().HasMaxLength(20);
             usuario.Property(u => u.FechaCreacion).IsRequired();
             // RF-CA-01: la base rechaza un segundo usuario con el mismo correo.
             usuario.HasIndex(u => u.Correo).IsUnique();

@@ -154,3 +154,33 @@ Actualización del archivo docs/pruebas.http para eliminar tokens reales expuest
   - `fd02717` Cuenta los intensos fallidos de inicio de sesion
   - `30d181c` Bloquea la cuenta tras cinco intentos fallidos
   - `9fef15e` Reinicia los intentos fallidos al iniciar sesion
+
+## Sesión 9: Roles y administración de usuarios (RF-CA-04, 05, 06, 08, 20 y 21)
+- **Qué le pedí:** Implementar en la rama `feat/administracion-usuarios`, un commit a la vez y con propuesta previa aprobada, los roles del sistema, el Administrador inicial, un catálogo único de permisos por operación aplicado en el servidor, y las operaciones del Administrador: listar usuarios, cambiar rol, desactivar y reactivar.
+
+- **Qué devolvió:**
+  - `Rol` (Administrador, Estandar) declarado en un solo lugar, con `NombreVisible()` para los mensajes ("Estándar").
+  - Columna `Rol` en `Usuario` guardada como texto (migración `AsignarRolUsuario`, con valor por defecto `Estandar` corregido a mano para los usuarios existentes); el registro siempre asigna Estándar e ignora un rol enviado en el cuerpo; `GET /api/auth/yo` devuelve el rol.
+  - Comando `dotnet run -- crear-admin`: crea el Administrador inicial activo desde `ADMIN_CORREO_INICIAL` y `ADMIN_CLAVE_INICIAL`, valida ambos valores, nunca imprime la contraseña y nunca promueve a un usuario existente.
+  - `CatalogoOperaciones` + `[Operacion]` + `FiltroAutorizacionOperaciones`: único punto que declara y aplica quién ejecuta cada operación (Pública, Autenticada o Rol), con denegar por defecto y el rol leído de la base en cada petición; se quitaron los `[Authorize]` sueltos.
+  - 403 explícito "…Se requiere el rol Administrador." con registro en consola (solo id y operación); se comprobó que encabezados (`X-Rol`) y query (`?rol=`) enviados por el cliente no cambian la decisión.
+  - `GET /api/usuarios` (DTO sin datos internos), `PUT /api/usuarios/{id}/rol` (efecto inmediato), `POST /api/usuarios/{id}/desactivar` (revoca todas sus sesiones en la misma transacción), `POST /api/usuarios/{id}/reactivar` (las sesiones viejas siguen revocadas) y la regla de que un Administrador no puede desactivarse a sí mismo.
+  - Casos de cada commit en `docs/pruebas.http` y pruebas de humo en bases desechables del scratchpad (incluida una copia temporal del proyecto para probar la exigencia de rol y el denegar por defecto antes de que existiera un endpoint de Administrador).
+
+- **Dónde se equivocó:** No hubo errores.
+- **Cómo lo detecté:** Sin errores que detectar; la implementación de los roles, el catálogo centralizado de operaciones, los filtros de autorización y las acciones del Administrador funcionaron de manera limpia y correcta a la primera.
+- **Cómo lo corregí:** No se requirieron correcciones.
+
+- **Pendiente detectado:** con un solo indicador `Activo`, un usuario desactivado puede reactivarse a sí mismo con `reenviar-activacion`; además, un Administrador todavía puede cambiar su propio rol. Ambos deben resolverse antes de fusionar la rama.
+
+- **Commit(s):**
+  - `8bf05ad` Declara los roles del sistema
+  - `107ee64` Asigna el rol Estandar a todo el usuario registrado
+  - `6e9ca2f` Agrega el comando para crear el Administrador inicial
+  - `47be344` Centraliza la exigencia de acceso de cada operación
+  - `cda82dd` Agrega el listado de usuarios para el Administrador
+  - `068c48a` Rechaza con mensaje explícito al usuario sin el rol requerido
+  - `d333656` Agrega el cambio de rol reservado al Administrador
+  - `7483672` Agrega la desactivación de usuarios por el Administrador
+  - `272f1a9` Agrega la reactivación de usuarios por el Administrador
+  - `2a6b17f` Impide que el Administrador se desactive a sí mismo

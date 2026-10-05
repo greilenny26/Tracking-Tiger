@@ -12,7 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Information. GET /api/auth/activar?token=... dejaría el token en claro en la consola del servidor.
 builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 
-builder.Services.AddControllers()
+// RF-CA-05: el filtro de operaciones corre antes de toda acción y aplica CatalogoOperaciones.
+builder.Services.AddControllers(opciones => opciones.Filters.Add<FiltroAutorizacionOperaciones>())
     .ConfigureApiBehaviorOptions(opciones =>
         opciones.InvalidModelStateResponseFactory = RespuestaSolicitudInvalida.Crear);
 
@@ -29,8 +30,11 @@ builder.Services.AddScoped<ServicioRegistro>();
 builder.Services.AddScoped<ServicioActivacion>();
 builder.Services.AddScoped<ServicioReenvioActivacion>();
 builder.Services.AddScoped<ServicioSesion>();
+builder.Services.AddScoped<ServicioAdministradorInicial>();
+builder.Services.AddScoped<ServicioAdministracionUsuarios>();
 
-// Esquema de autenticación por defecto (RF-CA-07): todo [Authorize] usa la credencial de sesión.
+// Esquema de autenticación por defecto (RF-CA-07): valida la credencial de sesión; lo usa
+// FiltroAutorizacionOperaciones para las operaciones que exigen sesión o rol.
 builder.Services.AddAuthentication(ManejadorAutenticacionSesion.Esquema)
     .AddScheme<AuthenticationSchemeOptions, ManejadorAutenticacionSesion>(ManejadorAutenticacionSesion.Esquema, null);
 builder.Services.AddAuthorization();
@@ -115,6 +119,30 @@ if (args.Length > 0 && args[0] == "enviar-correos")
     {
         // RD-08: no se muestran trazas, consultas ni datos del servidor.
         Console.WriteLine("No se pudo completar el envío de correos. Revisa la configuración SMTP y la conexión.");
+        Environment.ExitCode = 1;
+    }
+
+    return;
+}
+
+// Comando crear-admin (RF-CA-04): dotnet run -- crear-admin
+// Crea el primer Administrador desde ADMIN_CORREO_INICIAL y ADMIN_CLAVE_INICIAL y termina sin levantar
+// el servidor web. La lógica vive en ServicioAdministradorInicial.
+if (args.Length > 0 && args[0] == "crear-admin")
+{
+    using var alcance = app.Services.CreateScope();
+    var servicio = alcance.ServiceProvider.GetRequiredService<ServicioAdministradorInicial>();
+
+    try
+    {
+        var resultado = await servicio.CrearAsync();
+        Console.WriteLine(resultado.Mensaje);
+        Environment.ExitCode = resultado.Exito ? 0 : 1;
+    }
+    catch (Exception)
+    {
+        // RD-08: no se muestran trazas, consultas ni datos.
+        Console.WriteLine("No se pudo crear el Administrador inicial. Verifica la base de datos e inténtalo de nuevo.");
         Environment.ExitCode = 1;
     }
 

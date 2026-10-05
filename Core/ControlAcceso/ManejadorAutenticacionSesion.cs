@@ -9,7 +9,7 @@ using Tracking_Tiger.Core.Persistencia;
 namespace Tracking_Tiger.Core.ControlAcceso;
 
 // Autenticación por credencial de sesión opaca (RF-CA-03, RF-CA-07): "Authorization: Bearer <token>".
-// Único punto que valida sesiones; todo endpoint con [Authorize] lo reutiliza por ser el esquema por defecto.
+// Único punto que valida sesiones; lo usa FiltroAutorizacionOperaciones por ser el esquema por defecto.
 // Se busca la sesión por el SHA-256 del token (en la base nunca está el token en claro).
 // Con una entrada mal formada nunca lanza: responde "sin autenticar" y el cliente recibe 401.
 // Sesión no válida (siempre el mismo 401 con el mismo mensaje): sin encabezado, encabezado mal formado,
