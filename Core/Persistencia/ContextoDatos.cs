@@ -16,6 +16,7 @@ public class ContextoDatos : DbContext
     public DbSet<Usuario> Usuarios => Set<Usuario>();
     public DbSet<TokenActivacion> TokensActivacion => Set<TokenActivacion>();
     public DbSet<SesionUsuario> SesionesUsuario => Set<SesionUsuario>();
+    public DbSet<CodigoRecuperacion> CodigosRecuperacion => Set<CodigoRecuperacion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -80,6 +81,23 @@ public class ContextoDatos : DbContext
             sesion.HasOne(s => s.Usuario)
                 .WithMany()
                 .HasForeignKey(s => s.UsuarioId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CodigoRecuperacion>(codigo =>
+        {
+            codigo.ToTable("CodigosRecuperacion");
+            codigo.HasKey(c => c.Id);
+            codigo.Property(c => c.CodigoHash).IsRequired().HasMaxLength(64);
+            codigo.Property(c => c.FechaEmision).IsRequired();
+            codigo.Property(c => c.FechaVencimiento).IsRequired();
+            codigo.Property(c => c.Usado).IsRequired().HasDefaultValue(false);
+            // La recuperación busca el código por su hash. No es único: un código corto podría
+            // repetirse entre usuarios; la búsqueda también filtra por usuario.
+            codigo.HasIndex(c => c.CodigoHash);
+            codigo.HasOne(c => c.Usuario)
+                .WithMany()
+                .HasForeignKey(c => c.UsuarioId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

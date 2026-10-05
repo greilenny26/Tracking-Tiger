@@ -1026,6 +1026,20 @@ POST http://localhost:5000/api/usuarios/<id>/reactivar
 #   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
 
 ### ------------------------------------------------------------
+### RF-CA-10 — Tabla CodigosRecuperacion (base de datos, sin endpoint todavía)
+### ------------------------------------------------------------
+# Iniciar la API una vez ("dotnet run"; aplica la migración CrearCodigoRecuperacion si falta)
+# y abrir trackingtiger.db en DB Browser:
+#
+#   Esperado: existe la tabla CodigosRecuperacion con Id, UsuarioId, CodigoHash, FechaEmision,
+#             FechaVencimiento y Usado (valor por defecto 0).
+#             Índices: IX_CodigosRecuperacion_CodigoHash (NO único) e IX_CodigosRecuperacion_UsuarioId.
+#             Clave foránea UsuarioId → Usuarios(Id) con borrado en cascada.
+#             CodigoHash tiene largo máximo 64: solo guarda el SHA-256 en hexadecimal, nunca el código.
+#   En __EFMigrationsHistory aparece ...._CrearCodigoRecuperacion.
+#   La solicitud de recuperación que crea filas aquí llega en un paso posterior.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
