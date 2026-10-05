@@ -10,10 +10,12 @@ namespace Tracking_Tiger.Core.ControlAcceso;
 public sealed class ControladorUsuarios : ControllerBase
 {
     private readonly ServicioAdministracionUsuarios _servicio;
+    private readonly ServicioRecuperacionContrasena _servicioRecuperacion;
 
-    public ControladorUsuarios(ServicioAdministracionUsuarios servicio)
+    public ControladorUsuarios(ServicioAdministracionUsuarios servicio, ServicioRecuperacionContrasena servicioRecuperacion)
     {
         _servicio = servicio;
+        _servicioRecuperacion = servicioRecuperacion;
     }
 
     // RF-CA-21: lista [{id, nombre, correo, rol, activo}], ordenada por fecha de creación.
@@ -63,6 +65,18 @@ public sealed class ControladorUsuarios : ControllerBase
         var resultado = await _servicio.ReactivarAsync(id);
 
         return resultado.Estado == EstadoReactivacion.Reactivado
+            ? Ok(new { mensaje = resultado.Mensaje, usuario = resultado.Usuario })
+            : NotFound(new { mensaje = resultado.Mensaje });
+    }
+
+    // RF-CA-13: 200 si se forzó el restablecimiento, 404 si el id no existe.
+    [Operacion(CatalogoOperaciones.ForzarRestablecimiento)]
+    [HttpPost("{id:int}/forzar-restablecimiento")]
+    public async Task<IActionResult> ForzarRestablecimiento(int id)
+    {
+        var resultado = await _servicioRecuperacion.ForzarRestablecimientoAsync(id);
+
+        return resultado.Estado == EstadoForzarRestablecimiento.Forzado
             ? Ok(new { mensaje = resultado.Mensaje, usuario = resultado.Usuario })
             : NotFound(new { mensaje = resultado.Mensaje });
     }

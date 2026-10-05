@@ -1026,6 +1026,291 @@ POST http://localhost:5000/api/usuarios/<id>/reactivar
 #   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
 
 ### ------------------------------------------------------------
+### RF-CA-10 — Tabla CodigosRecuperacion (base de datos, sin endpoint todavía)
+### ------------------------------------------------------------
+# Iniciar la API una vez ("dotnet run"; aplica la migración CrearCodigoRecuperacion si falta)
+# y abrir trackingtiger.db en DB Browser:
+#
+#   Esperado: existe la tabla CodigosRecuperacion con Id, UsuarioId, CodigoHash, FechaEmision,
+#             FechaVencimiento y Usado (valor por defecto 0).
+#             Índices: IX_CodigosRecuperacion_CodigoHash (NO único) e IX_CodigosRecuperacion_UsuarioId.
+#             Clave foránea UsuarioId → Usuarios(Id) con borrado en cascada.
+#             CodigoHash tiene largo máximo 64: solo guarda el SHA-256 en hexadecimal, nunca el código.
+#   En __EFMigrationsHistory aparece ...._CrearCodigoRecuperacion.
+#   La solicitud de recuperación que crea filas aquí llega en un paso posterior.
+
+### ------------------------------------------------------------
+### RF-CA-09 — Solicitar recuperación de contraseña: POST /api/auth/recuperar (pública)
+### ------------------------------------------------------------
+# Los casos 1 y 2 deben responder EXACTAMENTE igual (mismo código y mismo JSON): el flujo no revela
+# qué correos están registrados. Qué pasa en la base con cada caso: ver RF-CA-10 (generar código).
+
+### 1. Correo registrado
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": "<correo-registrado>"}
+
+#   Esperado: HTTP 200 {"mensaje":"Si el correo está registrado, recibirás instrucciones para recuperar tu contraseña."}
+
+### 2. Correo no registrado
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": "nadie@example.com"}
+
+#   Esperado: el MISMO HTTP 200 con el mismo cuerpo, byte por byte, que el caso 1.
+
+### 3. Correo mal formado
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": "no-es-correo"}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo no tiene un formato válido."}
+
+### 4. Correo vacío o ausente
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": ""}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo es obligatorio."}. Igual con {}.
+
+### ------------------------------------------------------------
+### RF-CA-10 — Generar el código de recuperación (sin envío todavía)
+### ------------------------------------------------------------
+# Todas las respuestas son el mismo HTTP 200 de RF-CA-09; solo cambia lo que pasa en la base.
+# El código en claro no aparece en la respuesta ni en la consola del servidor.
+
+### 1. Usuario existente y ACTIVO
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": "<correo-de-un-usuario-activo>"}
+
+#   Esperado en DB Browser: fila nueva en CodigosRecuperacion con UsuarioId de ese usuario,
+#             CodigoHash de 64 caracteres hexadecimales en minúsculas (SHA-256), Usado = 0,
+#             FechaVencimiento = FechaEmision + 1 hora (UTC).
+
+### 2. Repetir el caso 1
+#   Esperado: la fila anterior pasa a Usado = 1 y aparece otra nueva con Usado = 0
+#             (solo hay un código utilizable a la vez). Ambas cosas en la misma transacción.
+
+### 3. Sin código: correo inexistente, cuenta sin activar o cuenta desactivada por un Administrador
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": "nadie@example.com"}
+
+#   Esperado: el mismo HTTP 200 y NINGUNA fila nueva en CodigosRecuperacion.
+#   Igual con el correo de una cuenta sin activar o de una cuenta desactivada.
+
+### ------------------------------------------------------------
+### RF-CA-10 — Correo de recuperación en la cola (sin contactar SMTP)
+### ------------------------------------------------------------
+#   1) Usuario ACTIVO, con SMTP caído o sin configurar: en una terminal con
+#      "set SMTP_HOST=localhost" y "set SMTP_PORT=2599" (o sin variables SMTP), ejecutar "dotnet run"
+#      y repetir el caso 1 de RF-CA-10 (generar código).
+#   Esperado: el mismo HTTP 200 de inmediato (no intenta conectarse a SMTP). En DB Browser, en la
+#             misma transacción que el código:
+#             - CorreosEnCola: fila nueva con Destinatario = correo del usuario,
+#               Asunto = "Recupera tu contraseña de Tracking Tiger", Estado = Pendiente, Intentos = 0.
+#             - El Cuerpo incluye el código (43 caracteres) e indica usar POST /api/auth/restablecer.
+#             - SHA-256 del código del correo = CodigoHash de la fila nueva de CodigosRecuperacion.
+#
+#   2) Correo inexistente, cuenta sin activar o cuenta desactivada:
+#   Esperado: el mismo HTTP 200 y NINGUNA fila nueva en CorreosEnCola.
+#
+#   3) Envío posterior con el proceso aparte (call .env.cmd; dotnet run -- enviar-correos):
+#   Esperado: el correo llega con el código y la fila pasa a Enviado.
+#
+#   En ningún caso el código aparece en la respuesta HTTP ni en la consola del servidor.
+
+### ------------------------------------------------------------
+### RF-CA-11 — Restablecer la contraseña: POST /api/auth/restablecer (pública)
+### ------------------------------------------------------------
+# Antes: pedir un código con POST /api/auth/recuperar (usuario activo con contraseña "Clave1234")
+# y copiarlo del correo recibido (o del Cuerpo en CorreosEnCola).
+
+### 1. Código válido
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "<código-del-correo>", "nuevaContrasena": "NuevaClave99"}
+
+#   Esperado: HTTP 200 {"mensaje":"Tu contraseña se actualizó. Ya puedes iniciar sesión con la nueva."}
+#   En DB Browser, en la misma transacción: ese código con Usado = 1 y Usuarios.HashContrasena
+#   distinto al anterior (sigue empezando con "PBKDF2-SHA256$").
+
+### 2. La contraseña anterior deja de servir; la nueva funciona
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-del-usuario>", "contrasena": "Clave1234"}
+
+#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."}
+#   Con "contrasena": "NuevaClave99" → HTTP 200 con token.
+
+### 3. Código desconocido
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "codigoQueNoExiste123", "nuevaContrasena": "NuevaClave99"}
+
+#   Esperado: HTTP 400 {"mensaje":"El código no es válido, ya fue usado o venció."}
+#   Igual con "codigo": "" o sin el campo. La contraseña no cambia.
+
+### 4. Contraseña nueva vacía o ausente
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "<código>", "nuevaContrasena": ""}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña nueva es obligatoria."}. El código no se marca como usado.
+
+### 5. Código ya usado (repetir el caso 1 con el MISMO código)
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "<código-ya-usado-en-el-caso-1>", "nuevaContrasena": "OtraClave77"}
+
+#   Esperado: HTTP 400 {"mensaje":"El código no es válido, ya fue usado o venció."}
+#   La contraseña NO cambia: login con "OtraClave77" → 401; con "NuevaClave99" → 200.
+#   Lo mismo con un código anterior que quedó Usado = 1 al pedir uno nuevo.
+
+### 6. Código vencido
+#   Pedir un código nuevo (POST /api/auth/recuperar) y, en DB Browser, adelantar su vencimiento:
+#     UPDATE CodigosRecuperacion SET FechaVencimiento = '2020-01-01 00:00:00' WHERE Id = <id>;
+#   ("Escribir cambios"). Luego usarlo:
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "<código-vencido>", "nuevaContrasena": "OtraClave77"}
+
+#   Esperado: HTTP 400 {"mensaje":"El código no es válido, ya fue usado o venció."}
+#   La contraseña NO cambia y el código sigue con Usado = 0.
+#   El vencimiento se compara con IReloj.AhoraUtc (UTC), no con la hora local.
+
+### 7. Contraseña nueva que no cumple la política (con un código VÁLIDO)
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "<código-vigente>", "nuevaContrasena": "abc12"}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña debe tener al menos 8 caracteres."}
+#   Con "abcdefgh" → "La contraseña debe incluir al menos un número."; con "12345678" →
+#   "La contraseña debe incluir al menos una letra."
+#   El código NO se consume (sigue Usado = 0), la contraseña no cambia y las sesiones siguen abiertas.
+#   Reintentar con el MISMO código y "NuevaClave99" → HTTP 200.
+
+### ------------------------------------------------------------
+### RF-CA-12 — Las sesiones abiertas dejan de ser válidas al restablecer la contraseña
+### ------------------------------------------------------------
+#   1) Iniciar sesión DOS veces con el usuario (tokens S1 y S2) y comprobar GET /api/auth/yo → 200 con ambos.
+#   2) Pedir un código y restablecer la contraseña (caso 1 de RF-CA-11) → HTTP 200.
+#   Esperado en DB Browser, en la misma transacción: contraseña nueva, código Usado = 1 y TODAS las
+#             sesiones de ese usuario con Revocada = 1. Las sesiones de otros usuarios no cambian.
+#   3) GET /api/auth/yo con S1 y con S2 → HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+#   4) Iniciar sesión con la contraseña nueva → token nuevo; GET /api/auth/yo → 200.
+#   5) Un restablecimiento RECHAZADO (código desconocido, usado o vencido) no revoca ninguna sesión.
+
+### ------------------------------------------------------------
+### RF-CA-13 — Restablecimiento forzado: POST /api/usuarios/{id}/forzar-restablecimiento (solo Administrador)
+### ------------------------------------------------------------
+# Antes: token del Administrador; un usuario activo con su contraseña conocida y una sesión abierta (S1).
+# El código se envía por la cola de correos (sin contactar SMTP durante la operación).
+
+### 1. El Administrador fuerza el restablecimiento
+POST http://localhost:5000/api/usuarios/<id-del-usuario>/forzar-restablecimiento
+Authorization: Bearer <token-del-administrador>
+
+#   Esperado: HTTP 200 {"mensaje":"Se forzó el restablecimiento: la contraseña anterior ya no sirve, sus
+#             sesiones se cerraron y se le envió por correo un código para definir una nueva.","usuario":{...}}
+#   En DB Browser, en la misma transacción:
+#   - Usuarios.HashContrasena cambió (sigue empezando con "PBKDF2-SHA256$"; nunca vacío ni NULL).
+#   - CodigosRecuperacion: fila nueva con Usado = 0 y vencimiento de 1 hora; los anteriores sin usar → Usado = 1.
+#   - SesionesUsuario: todas las sesiones de ese usuario con Revocada = 1.
+#   - CorreosEnCola: fila nueva Pendiente para ese usuario, Asunto = "Debes definir una nueva contraseña
+#     en Tracking Tiger", con el código (43 caracteres) en el Cuerpo. Funciona aunque SMTP esté caído.
+#   Después: "dotnet run -- enviar-correos" entrega el correo; el usuario usa ese código en
+#   POST /api/auth/restablecer (RF-CA-11) y vuelve a entrar con su contraseña nueva.
+
+### 2. Su sesión anterior deja de servir
+GET http://localhost:5000/api/auth/yo
+Authorization: Bearer <token-S1>
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 3. Su contraseña anterior deja de servir
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-del-usuario>", "contrasena": "<su-contraseña-anterior>"}
+
+#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."}
+
+### 4. Id inexistente
+POST http://localhost:5000/api/usuarios/99999/forzar-restablecimiento
+Authorization: Bearer <token-del-administrador>
+
+#   Esperado: HTTP 404 {"mensaje":"No existe un usuario con ese id."}
+
+### 5. Un Estándar lo intenta
+POST http://localhost:5000/api/usuarios/<id>/forzar-restablecimiento
+Authorization: Bearer <token-de-un-estándar>
+
+#   Esperado: HTTP 403 {"mensaje":"No tienes permiso para ejecutar esta operación. Se requiere el rol Administrador."}
+
+### 6. Sin sesión
+POST http://localhost:5000/api/usuarios/<id>/forzar-restablecimiento
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### ------------------------------------------------------------
+### RF-CA-22 — Cambiar la contraseña propia con sesión: POST /api/auth/cambiar-contrasena
+### ------------------------------------------------------------
+# Antes: usuario activo con contraseña "Clave1234" que inicia sesión DOS veces (tokens T1 y T2).
+
+### 1. Contraseña actual incorrecta
+POST http://localhost:5000/api/auth/cambiar-contrasena
+Authorization: Bearer <token-T1>
+Content-Type: application/json
+
+{"contrasenaActual": "NoEsMiClave1", "nuevaContrasena": "NuevaClave99"}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña actual no es correcta."}. Nada cambia; T1 y T2 siguen sirviendo.
+
+### 2. Contraseña nueva que no cumple la política (RF-CA-14)
+POST http://localhost:5000/api/auth/cambiar-contrasena
+Authorization: Bearer <token-T1>
+Content-Type: application/json
+
+{"contrasenaActual": "Clave1234", "nuevaContrasena": "abc12"}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña debe tener al menos 8 caracteres."}. Nada cambia.
+#   Campos vacíos → "La contraseña actual es obligatoria." / "La contraseña nueva es obligatoria."
+
+### 3. Cambio correcto
+POST http://localhost:5000/api/auth/cambiar-contrasena
+Authorization: Bearer <token-T1>
+Content-Type: application/json
+
+{"contrasenaActual": "Clave1234", "nuevaContrasena": "NuevaClave99"}
+
+#   Esperado: HTTP 200 {"mensaje":"Tu contraseña se actualizó. Por seguridad se cerraron todas tus sesiones: inicia sesión de nuevo."}
+#   RF-CA-12: GET /api/auth/yo con T1 y con T2 → HTTP 401. En DB Browser todas sus sesiones con Revocada = 1.
+#   Login con "Clave1234" → 401; con "NuevaClave99" → 200.
+
+### 4. Sin sesión
+POST http://localhost:5000/api/auth/cambiar-contrasena
+Content-Type: application/json
+
+{"contrasenaActual": "Clave1234", "nuevaContrasena": "NuevaClave99"}
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

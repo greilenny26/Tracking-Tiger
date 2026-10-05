@@ -13,14 +13,17 @@ public sealed class ControladorAutenticacion : ControllerBase
     private readonly ServicioActivacion _servicioActivacion;
     private readonly ServicioReenvioActivacion _servicioReenvio;
     private readonly ServicioSesion _servicioSesion;
+    private readonly ServicioRecuperacionContrasena _servicioRecuperacion;
 
     public ControladorAutenticacion(ServicioRegistro servicioRegistro, ServicioActivacion servicioActivacion,
-        ServicioReenvioActivacion servicioReenvio, ServicioSesion servicioSesion)
+        ServicioReenvioActivacion servicioReenvio, ServicioSesion servicioSesion,
+        ServicioRecuperacionContrasena servicioRecuperacion)
     {
         _servicioRegistro = servicioRegistro;
         _servicioActivacion = servicioActivacion;
         _servicioReenvio = servicioReenvio;
         _servicioSesion = servicioSesion;
+        _servicioRecuperacion = servicioRecuperacion;
     }
 
     // RF-CA-01: 201 con los datos públicos del usuario, 400 si los datos no son válidos,
@@ -121,5 +124,45 @@ public sealed class ControladorAutenticacion : ControllerBase
 
         await _servicioSesion.CerrarSesionAsync(sesionId);
         return Ok(new { mensaje = "Sesión cerrada correctamente." });
+    }
+
+    // RF-CA-22: 200 si se cambió (y se cerraron todas las sesiones), 400 si faltan datos, no cumple la
+    // política o la contraseña actual no es correcta. Sin sesión válida, el esquema responde 401.
+    [Operacion(CatalogoOperaciones.CambiarContrasenaPropia)]
+    [HttpPost("cambiar-contrasena")]
+    public async Task<IActionResult> CambiarContrasena([FromBody] SolicitudCambioContrasena solicitud)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+            return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
+
+        var resultado = await _servicioSesion.CambiarContrasenaAsync(usuarioId, solicitud.ContrasenaActual, solicitud.NuevaContrasena);
+
+        return resultado.Estado == EstadoCambioContrasena.Cambiada
+            ? Ok(new { mensaje = resultado.Mensaje })
+            : BadRequest(new { mensaje = resultado.Mensaje });
+    }
+
+    // RF-CA-09: 200 con la misma respuesta para cualquier correo bien formado; 400 solo si el formato no es válido.
+    [Operacion(CatalogoOperaciones.SolicitarRecuperacion)]
+    [HttpPost("recuperar")]
+    public async Task<IActionResult> SolicitarRecuperacion([FromBody] SolicitudRecuperacion solicitud)
+    {
+        var resultado = await _servicioRecuperacion.SolicitarAsync(solicitud.Correo);
+
+        return resultado.Estado == EstadoSolicitudRecuperacion.Aceptada
+            ? Ok(new { mensaje = resultado.Mensaje })
+            : BadRequest(new { mensaje = resultado.Mensaje });
+    }
+
+    // RF-CA-11: 200 si la contraseña se actualizó; 400 si el código no sirve o faltan datos.
+    [Operacion(CatalogoOperaciones.Restablecer)]
+    [HttpPost("restablecer")]
+    public async Task<IActionResult> Restablecer([FromBody] SolicitudRestablecimiento solicitud)
+    {
+        var resultado = await _servicioRecuperacion.RestablecerAsync(solicitud.Codigo, solicitud.NuevaContrasena);
+
+        return resultado.Estado == EstadoRestablecimiento.Restablecida
+            ? Ok(new { mensaje = resultado.Mensaje })
+            : BadRequest(new { mensaje = resultado.Mensaje });
     }
 }

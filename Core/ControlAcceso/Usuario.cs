@@ -52,6 +52,9 @@ public class Usuario
     // y el usuario debe iniciar sesión de nuevo.
     public void Reactivar() => Activo = true;
 
+    // Cambio de contraseña (RF-CA-11): recibe el hash ya calculado, nunca la contraseña en claro.
+    public void CambiarContrasena(string nuevoHash) => HashContrasena = nuevoHash;
+
     // Cambio de rol (RF-CA-08): solo lo invoca ServicioAdministracionUsuarios, en una operación
     // que el catálogo reserva al Administrador.
     public void CambiarRol(Rol nuevoRol) => Rol = nuevoRol;
