@@ -917,6 +917,15 @@ Content-Type: application/json
 
 #   Esperado: el mismo HTTP 403; en DB Browser su Rol sigue en 'Estandar'.
 
+### 8. El Administrador intenta cambiar su propio rol
+PUT http://localhost:5000/api/usuarios/<id-del-propio-administrador>/rol
+Authorization: Bearer <token-del-administrador>
+Content-Type: application/json
+
+{"rol": "Estandar"}
+
+#   Esperado: HTTP 400 {"mensaje":"No puedes cambiar tu propio rol."}; su Rol sigue en 'Administrador'.
+
 ### 7. Sin sesión
 PUT http://localhost:5000/api/usuarios/<id>/rol
 Content-Type: application/json
@@ -1266,6 +1275,21 @@ Authorization: Bearer <token-de-un-estándar>
 POST http://localhost:5000/api/usuarios/<id>/forzar-restablecimiento
 
 #   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### ------------------------------------------------------------
+### RF-CA-20 — Un usuario desactivado no puede reactivarse solo
+### ------------------------------------------------------------
+# Usuarios.Desactivado distingue "desactivado por un Administrador" de "todavía no activó su cuenta".
+#   1) Desactivar a un usuario activo (caso 1 de "Desactivar usuario") → en DB Browser Activo = 0 y Desactivado = 1.
+#   2) Ese usuario pide POST /api/auth/reenviar-activacion con su correo → el mismo HTTP 200 de siempre,
+#      pero NO se crea token ni correo (TokensActivacion y CorreosEnCola sin filas nuevas).
+#      Un enlace de activación viejo de esa cuenta → HTTP 400 "El enlace de activación no es válido."
+#   3) Inicia sesión con su contraseña correcta → HTTP 403 {"mensaje":"Tu cuenta fue desactivada por un Administrador."}
+#      (con una contraseña incorrecta sigue el 401 genérico).
+#   4) El Administrador lo reactiva → HTTP 200; Activo = 1 y Desactivado = 0; puede iniciar sesión.
+#   5) El Administrador intenta "reactivar" a un usuario que NUNCA activó su cuenta por correo →
+#      HTTP 400 {"mensaje":"El usuario todavía no activó su cuenta por correo; no hay nada que reactivar."}
+#      y la cuenta sigue sin activar (reactivar nunca se salta la activación por correo).
 
 ### ------------------------------------------------------------
 ### RF-CA-22 — Cambiar la contraseña propia con sesión: POST /api/auth/cambiar-contrasena

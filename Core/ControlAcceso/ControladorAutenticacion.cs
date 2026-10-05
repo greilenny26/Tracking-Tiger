@@ -94,7 +94,8 @@ public sealed class ControladorAutenticacion : ControllerBase
         {
             EstadoInicioSesion.Iniciada => Ok(new { token = resultado.Token, venceEn = resultado.VenceEn }),
             EstadoInicioSesion.DatosInvalidos => BadRequest(new { mensaje = resultado.Mensaje }),
-            EstadoInicioSesion.CuentaInactiva => StatusCode(StatusCodes.Status403Forbidden, new { mensaje = resultado.Mensaje }),
+            EstadoInicioSesion.CuentaInactiva or EstadoInicioSesion.CuentaDesactivada =>
+                StatusCode(StatusCodes.Status403Forbidden, new { mensaje = resultado.Mensaje }),
             EstadoInicioSesion.Bloqueada => StatusCode(StatusCodes.Status429TooManyRequests, new { mensaje = resultado.Mensaje }),
             _ => Unauthorized(new { mensaje = resultado.Mensaje })
         };

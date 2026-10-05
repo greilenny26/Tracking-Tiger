@@ -27,6 +27,11 @@ public class Usuario
     // Solo la propia entidad puede cambiarlo; desde fuera es de solo lectura.
     public bool Activo { get; private set; }
 
+    // RF-CA-20: true si un Administrador desactivó la cuenta. Distingue "desactivado por un
+    // Administrador" de "todavía no activó su cuenta por correo": un usuario desactivado no puede
+    // reactivarse solo con un enlace de activación; solo un Administrador puede reactivarlo.
+    public bool Desactivado { get; private set; }
+
     // Intentos fallidos de inicio de sesión (RF-CA-19). Solo lo incrementa el servicio de sesión
     // con una actualización atómica en la base; el bloqueo y el reinicio llegan en pasos aparte.
     public int IntentosFallidos { get; private set; }
@@ -46,11 +51,19 @@ public class Usuario
 
     // Desactivación por el Administrador (RF-CA-20). La revocación de sesiones la hace el servicio
     // en la misma transacción.
-    public void Desactivar() => Activo = false;
+    public void Desactivar()
+    {
+        Activo = false;
+        Desactivado = true;
+    }
 
     // Reactivación por el Administrador (RF-CA-20). No toca sesiones: las anteriores siguen revocadas
     // y el usuario debe iniciar sesión de nuevo.
-    public void Reactivar() => Activo = true;
+    public void Reactivar()
+    {
+        Activo = true;
+        Desactivado = false;
+    }
 
     // Cambio de contraseña (RF-CA-11): recibe el hash ya calculado, nunca la contraseña en claro.
     public void CambiarContrasena(string nuevoHash) => HashContrasena = nuevoHash;

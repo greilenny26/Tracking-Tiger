@@ -32,8 +32,12 @@ public sealed class ServicioAdministracionUsuarios
 
     // RF-CA-08: cambia el rol de un usuario. Surte efecto en la siguiente petición de ese usuario,
     // porque FiltroAutorizacionOperaciones lee el rol de la base en cada petición.
-    public async Task<ResultadoCambioRol> CambiarRolAsync(int usuarioId, string? rolSolicitado)
+    public async Task<ResultadoCambioRol> CambiarRolAsync(int usuarioId, string? rolSolicitado, int idSolicitante)
     {
+        // El id de quien pide la operación viene de la sesión del servidor, nunca del cliente.
+        if (usuarioId == idSolicitante)
+            return ResultadoCambioRol.PropioUsuario();
+
         if (string.IsNullOrWhiteSpace(rolSolicitado))
             return ResultadoCambioRol.RolInvalido("El rol es obligatorio.");
 
@@ -92,6 +96,10 @@ public sealed class ServicioAdministracionUsuarios
         var usuario = await _contexto.Usuarios.SingleOrDefaultAsync(u => u.Id == usuarioId);
         if (usuario is null)
             return ResultadoReactivacion.NoEncontrado();
+
+        // RF-CA-20: si nunca activó su cuenta por correo, reactivar no la activa (no se salta ese paso).
+        if (!usuario.Activo && !usuario.Desactivado)
+            return ResultadoReactivacion.SinActivarPorCorreo();
 
         usuario.Reactivar();
         await _contexto.SaveChangesAsync();
