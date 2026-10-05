@@ -46,4 +46,16 @@ public sealed class ControladorUsuarios : ControllerBase
             ? Ok(new { mensaje = resultado.Mensaje, usuario = resultado.Usuario })
             : NotFound(new { mensaje = resultado.Mensaje });
     }
+
+    // RF-CA-20: 200 con el usuario reactivado, 404 si el id no existe.
+    [Operacion(CatalogoOperaciones.ReactivarUsuario)]
+    [HttpPost("{id:int}/reactivar")]
+    public async Task<IActionResult> Reactivar(int id)
+    {
+        var resultado = await _servicio.ReactivarAsync(id);
+
+        return resultado.Estado == EstadoReactivacion.Reactivado
+            ? Ok(new { mensaje = resultado.Mensaje, usuario = resultado.Usuario })
+            : NotFound(new { mensaje = resultado.Mensaje });
+    }
 }

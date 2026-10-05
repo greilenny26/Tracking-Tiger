@@ -79,4 +79,19 @@ public sealed class ServicioAdministracionUsuarios
         return ResultadoDesactivacion.Desactivado(new UsuarioListado(
             usuario.Id, usuario.Nombre, usuario.Correo, usuario.Rol.ToString(), usuario.Activo));
     }
+
+    // RF-CA-20: reactiva al usuario. Las sesiones revocadas al desactivarlo siguen revocadas
+    // (el esquema de sesión las rechaza siempre); para entrar debe iniciar sesión de nuevo.
+    public async Task<ResultadoReactivacion> ReactivarAsync(int usuarioId)
+    {
+        var usuario = await _contexto.Usuarios.SingleOrDefaultAsync(u => u.Id == usuarioId);
+        if (usuario is null)
+            return ResultadoReactivacion.NoEncontrado();
+
+        usuario.Reactivar();
+        await _contexto.SaveChangesAsync();
+
+        return ResultadoReactivacion.Reactivado(new UsuarioListado(
+            usuario.Id, usuario.Nombre, usuario.Correo, usuario.Rol.ToString(), usuario.Activo));
+    }
 }
