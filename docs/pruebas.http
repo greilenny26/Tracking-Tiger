@@ -1132,8 +1132,7 @@ Content-Type: application/json
 ### ------------------------------------------------------------
 # Antes: pedir un código con POST /api/auth/recuperar (usuario activo con contraseña "Clave1234")
 # y copiarlo del correo recibido (o del Cuerpo en CorreosEnCola).
-# Todavía no se aplica la política de contraseña y las sesiones abiertas siguen válidas
-# (llegan en pasos aparte).
+# Todavía no se aplica la política de contraseña (llega en un paso aparte).
 
 ### 1. Código válido
 POST http://localhost:5000/api/auth/restablecer
@@ -1193,6 +1192,17 @@ Content-Type: application/json
 #   Esperado: HTTP 400 {"mensaje":"El código no es válido, ya fue usado o venció."}
 #   La contraseña NO cambia y el código sigue con Usado = 0.
 #   El vencimiento se compara con IReloj.AhoraUtc (UTC), no con la hora local.
+
+### ------------------------------------------------------------
+### RF-CA-12 — Las sesiones abiertas dejan de ser válidas al restablecer la contraseña
+### ------------------------------------------------------------
+#   1) Iniciar sesión DOS veces con el usuario (tokens S1 y S2) y comprobar GET /api/auth/yo → 200 con ambos.
+#   2) Pedir un código y restablecer la contraseña (caso 1 de RF-CA-11) → HTTP 200.
+#   Esperado en DB Browser, en la misma transacción: contraseña nueva, código Usado = 1 y TODAS las
+#             sesiones de ese usuario con Revocada = 1. Las sesiones de otros usuarios no cambian.
+#   3) GET /api/auth/yo con S1 y con S2 → HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+#   4) Iniciar sesión con la contraseña nueva → token nuevo; GET /api/auth/yo → 200.
+#   5) Un restablecimiento RECHAZADO (código desconocido, usado o vencido) no revoca ninguna sesión.
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API

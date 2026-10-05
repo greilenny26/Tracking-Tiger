@@ -77,8 +77,8 @@ public sealed class ServicioRecuperacionContrasena
     }
 
     // RF-CA-11: con un código válido define la contraseña nueva. Un código desconocido, ya usado o
-    // vencido se rechaza con el mismo mensaje y sin cambiar nada. La política de contraseña y el
-    // cierre de sesiones llegan en pasos aparte.
+    // vencido se rechaza con el mismo mensaje y sin cambiar nada. RF-CA-12: al restablecerla se
+    // revocan TODAS las sesiones del usuario. La política de contraseña llega en un paso aparte.
     public async Task<ResultadoRestablecimiento> RestablecerAsync(string? codigo, string? nuevaContrasena)
     {
         if (string.IsNullOrWhiteSpace(codigo))
@@ -97,11 +97,19 @@ public sealed class ServicioRecuperacionContrasena
         if (registro is null || registro.Usado || registro.FechaVencimiento < _reloj.AhoraUtc)
             return ResultadoRestablecimiento.CodigoInvalido();
 
+        // Contraseña nueva, código usado y sesiones revocadas en UNA transacción: o todo o nada.
+        await using var transaccion = await _contexto.Database.BeginTransactionAsync();
+
         registro.Usuario.CambiarContrasena(_hasher.Hashear(nuevaContrasena));
         registro.MarcarUsado();
-
-        // Un solo SaveChanges = una sola transacción: contraseña nueva y código usado, o nada.
         await _contexto.SaveChangesAsync();
+
+        // RF-CA-12: toda credencial emitida antes del restablecimiento deja de servir.
+        await _contexto.SesionesUsuario
+            .Where(s => s.UsuarioId == registro.UsuarioId && !s.Revocada)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Revocada, true));
+
+        await transaccion.CommitAsync();
 
         return ResultadoRestablecimiento.Restablecida();
     }
