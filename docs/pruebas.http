@@ -1043,8 +1043,7 @@ POST http://localhost:5000/api/usuarios/<id>/reactivar
 ### RF-CA-09 — Solicitar recuperación de contraseña: POST /api/auth/recuperar (pública)
 ### ------------------------------------------------------------
 # Los casos 1 y 2 deben responder EXACTAMENTE igual (mismo código y mismo JSON): el flujo no revela
-# qué correos están registrados. Todavía no se genera ningún código: no se crean filas en
-# CodigosRecuperacion ni en CorreosEnCola.
+# qué correos están registrados. Qué pasa en la base con cada caso: ver RF-CA-10 (generar código).
 
 ### 1. Correo registrado
 POST http://localhost:5000/api/auth/recuperar
@@ -1077,6 +1076,36 @@ Content-Type: application/json
 {"correo": ""}
 
 #   Esperado: HTTP 400 {"mensaje":"El correo es obligatorio."}. Igual con {}.
+
+### ------------------------------------------------------------
+### RF-CA-10 — Generar el código de recuperación (sin envío todavía)
+### ------------------------------------------------------------
+# Todas las respuestas son el mismo HTTP 200 de RF-CA-09; solo cambia lo que pasa en la base.
+# Todavía no se encola ningún correo (CorreosEnCola no cambia) y el código en claro no aparece
+# en la respuesta ni en la consola del servidor.
+
+### 1. Usuario existente y ACTIVO
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": "<correo-de-un-usuario-activo>"}
+
+#   Esperado en DB Browser: fila nueva en CodigosRecuperacion con UsuarioId de ese usuario,
+#             CodigoHash de 64 caracteres hexadecimales en minúsculas (SHA-256), Usado = 0,
+#             FechaVencimiento = FechaEmision + 1 hora (UTC).
+
+### 2. Repetir el caso 1
+#   Esperado: la fila anterior pasa a Usado = 1 y aparece otra nueva con Usado = 0
+#             (solo hay un código utilizable a la vez). Ambas cosas en la misma transacción.
+
+### 3. Sin código: correo inexistente, cuenta sin activar o cuenta desactivada por un Administrador
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": "nadie@example.com"}
+
+#   Esperado: el mismo HTTP 200 y NINGUNA fila nueva en CodigosRecuperacion.
+#   Igual con el correo de una cuenta sin activar o de una cuenta desactivada.
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API

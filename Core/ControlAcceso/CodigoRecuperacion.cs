@@ -5,8 +5,8 @@ namespace Tracking_Tiger.Core.ControlAcceso;
 // Todas las fechas están en UTC.
 public class CodigoRecuperacion
 {
-    // Vigencia del código, según el plan aprobado.
-    public static readonly TimeSpan Vigencia = TimeSpan.FromMinutes(15);
+    // Vigencia del código: 1 hora.
+    public static readonly TimeSpan Vigencia = TimeSpan.FromHours(1);
 
     public int Id { get; private set; }
     public int UsuarioId { get; private set; }
@@ -20,6 +20,9 @@ public class CodigoRecuperacion
     private CodigoRecuperacion()
     {
     }
+
+    // Marca el código como consumido (RF-CA-10): al usarlo, o al emitir uno nuevo para el mismo usuario.
+    public void MarcarUsado() => Usado = true;
 
     public static CodigoRecuperacion Emitir(Usuario usuario, string codigoHash, DateTime ahoraUtc) =>
         new()

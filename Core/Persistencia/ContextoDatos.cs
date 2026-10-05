@@ -92,8 +92,7 @@ public class ContextoDatos : DbContext
             codigo.Property(c => c.FechaEmision).IsRequired();
             codigo.Property(c => c.FechaVencimiento).IsRequired();
             codigo.Property(c => c.Usado).IsRequired().HasDefaultValue(false);
-            // La recuperación busca el código por su hash. No es único: un código corto podría
-            // repetirse entre usuarios; la búsqueda también filtra por usuario.
+            // La recuperación busca el código por su hash (SHA-256 de 32 bytes aleatorios).
             codigo.HasIndex(c => c.CodigoHash);
             codigo.HasOne(c => c.Usuario)
                 .WithMany()
