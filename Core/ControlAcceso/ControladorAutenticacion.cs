@@ -126,6 +126,22 @@ public sealed class ControladorAutenticacion : ControllerBase
         return Ok(new { mensaje = "Sesión cerrada correctamente." });
     }
 
+    // RF-CA-22: 200 si se cambió (y se cerraron todas las sesiones), 400 si faltan datos, no cumple la
+    // política o la contraseña actual no es correcta. Sin sesión válida, el esquema responde 401.
+    [Operacion(CatalogoOperaciones.CambiarContrasenaPropia)]
+    [HttpPost("cambiar-contrasena")]
+    public async Task<IActionResult> CambiarContrasena([FromBody] SolicitudCambioContrasena solicitud)
+    {
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var usuarioId))
+            return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
+
+        var resultado = await _servicioSesion.CambiarContrasenaAsync(usuarioId, solicitud.ContrasenaActual, solicitud.NuevaContrasena);
+
+        return resultado.Estado == EstadoCambioContrasena.Cambiada
+            ? Ok(new { mensaje = resultado.Mensaje })
+            : BadRequest(new { mensaje = resultado.Mensaje });
+    }
+
     // RF-CA-09: 200 con la misma respuesta para cualquier correo bien formado; 400 solo si el formato no es válido.
     [Operacion(CatalogoOperaciones.SolicitarRecuperacion)]
     [HttpPost("recuperar")]

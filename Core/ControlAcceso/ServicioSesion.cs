@@ -123,6 +123,38 @@ public sealed class ServicioSesion
         await _contexto.SaveChangesAsync();
     }
 
+    // RF-CA-22: el usuario con sesión cambia su propia contraseña indicando la actual.
+    // Aplica la política (RF-CA-14) y, en la misma transacción, revoca TODAS sus sesiones, incluida la
+    // actual (RF-CA-12): cualquier credencial emitida antes del cambio deja de servir.
+    public async Task<ResultadoCambioContrasena> CambiarContrasenaAsync(int usuarioId, string? contrasenaActual, string? nuevaContrasena)
+    {
+        if (string.IsNullOrEmpty(contrasenaActual))
+            return ResultadoCambioContrasena.DatosInvalidos("La contraseña actual es obligatoria.");
+        if (string.IsNullOrEmpty(nuevaContrasena))
+            return ResultadoCambioContrasena.DatosInvalidos("La contraseña nueva es obligatoria.");
+
+        var politica = PoliticaContrasena.Validar(nuevaContrasena);
+        if (!politica.Valido)
+            return ResultadoCambioContrasena.DatosInvalidos(politica.Mensaje!);
+
+        var usuario = await _contexto.Usuarios.SingleOrDefaultAsync(u => u.Id == usuarioId);
+        if (usuario is null || !_hasher.Verificar(contrasenaActual, usuario.HashContrasena))
+            return ResultadoCambioContrasena.ContrasenaActualIncorrecta();
+
+        await using var transaccion = await _contexto.Database.BeginTransactionAsync();
+
+        usuario.CambiarContrasena(_hasher.Hashear(nuevaContrasena));
+        await _contexto.SaveChangesAsync();
+
+        await _contexto.SesionesUsuario
+            .Where(s => s.UsuarioId == usuarioId && !s.Revocada)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Revocada, true));
+
+        await transaccion.CommitAsync();
+
+        return ResultadoCambioContrasena.Cambiada();
+    }
+
     // Datos públicos del usuario autenticado (RF-CA-07). Null si el usuario ya no existe.
     public async Task<UsuarioActual?> ObtenerUsuarioActualAsync(int usuarioId) =>
         await _contexto.Usuarios

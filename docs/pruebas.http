@@ -1268,6 +1268,49 @@ POST http://localhost:5000/api/usuarios/<id>/forzar-restablecimiento
 #   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
 
 ### ------------------------------------------------------------
+### RF-CA-22 — Cambiar la contraseña propia con sesión: POST /api/auth/cambiar-contrasena
+### ------------------------------------------------------------
+# Antes: usuario activo con contraseña "Clave1234" que inicia sesión DOS veces (tokens T1 y T2).
+
+### 1. Contraseña actual incorrecta
+POST http://localhost:5000/api/auth/cambiar-contrasena
+Authorization: Bearer <token-T1>
+Content-Type: application/json
+
+{"contrasenaActual": "NoEsMiClave1", "nuevaContrasena": "NuevaClave99"}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña actual no es correcta."}. Nada cambia; T1 y T2 siguen sirviendo.
+
+### 2. Contraseña nueva que no cumple la política (RF-CA-14)
+POST http://localhost:5000/api/auth/cambiar-contrasena
+Authorization: Bearer <token-T1>
+Content-Type: application/json
+
+{"contrasenaActual": "Clave1234", "nuevaContrasena": "abc12"}
+
+#   Esperado: HTTP 400 {"mensaje":"La contraseña debe tener al menos 8 caracteres."}. Nada cambia.
+#   Campos vacíos → "La contraseña actual es obligatoria." / "La contraseña nueva es obligatoria."
+
+### 3. Cambio correcto
+POST http://localhost:5000/api/auth/cambiar-contrasena
+Authorization: Bearer <token-T1>
+Content-Type: application/json
+
+{"contrasenaActual": "Clave1234", "nuevaContrasena": "NuevaClave99"}
+
+#   Esperado: HTTP 200 {"mensaje":"Tu contraseña se actualizó. Por seguridad se cerraron todas tus sesiones: inicia sesión de nuevo."}
+#   RF-CA-12: GET /api/auth/yo con T1 y con T2 → HTTP 401. En DB Browser todas sus sesiones con Revocada = 1.
+#   Login con "Clave1234" → 401; con "NuevaClave99" → 200.
+
+### 4. Sin sesión
+POST http://localhost:5000/api/auth/cambiar-contrasena
+Content-Type: application/json
+
+{"contrasenaActual": "Clave1234", "nuevaContrasena": "NuevaClave99"}
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)
