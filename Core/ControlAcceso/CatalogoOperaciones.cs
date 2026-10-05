@@ -18,6 +18,7 @@ public static class CatalogoOperaciones
     public const string CambiarRol = "cambiar-rol";
     public const string DesactivarUsuario = "desactivar-usuario";
     public const string ReactivarUsuario = "reactivar-usuario";
+    public const string ForzarRestablecimiento = "forzar-restablecimiento";
 
     public static readonly IReadOnlyDictionary<string, ExigenciaAcceso> Exigencias = new Dictionary<string, ExigenciaAcceso>
     {
@@ -33,6 +34,7 @@ public static class CatalogoOperaciones
         [CambiarRol]             = ExigenciaAcceso.DeRol(Rol.Administrador),
         [DesactivarUsuario]      = ExigenciaAcceso.DeRol(Rol.Administrador),
         [ReactivarUsuario]       = ExigenciaAcceso.DeRol(Rol.Administrador),
+        [ForzarRestablecimiento] = ExigenciaAcceso.DeRol(Rol.Administrador),
     };
 }
 

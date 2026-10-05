@@ -1216,6 +1216,55 @@ Content-Type: application/json
 #   5) Un restablecimiento RECHAZADO (código desconocido, usado o vencido) no revoca ninguna sesión.
 
 ### ------------------------------------------------------------
+### RF-CA-13 — Restablecimiento forzado: POST /api/usuarios/{id}/forzar-restablecimiento (solo Administrador)
+### ------------------------------------------------------------
+# Antes: token del Administrador; un usuario activo con su contraseña conocida y una sesión abierta (S1).
+# Todavía no se envía el correo con el código (llega en el siguiente paso).
+
+### 1. El Administrador fuerza el restablecimiento
+POST http://localhost:5000/api/usuarios/<id-del-usuario>/forzar-restablecimiento
+Authorization: Bearer <token-del-administrador>
+
+#   Esperado: HTTP 200 {"mensaje":"Se forzó el restablecimiento: la contraseña anterior ya no sirve, sus
+#             sesiones se cerraron y se generó un código de recuperación.","usuario":{...}}
+#   En DB Browser, en la misma transacción:
+#   - Usuarios.HashContrasena cambió (sigue empezando con "PBKDF2-SHA256$"; nunca vacío ni NULL).
+#   - CodigosRecuperacion: fila nueva con Usado = 0 y vencimiento de 1 hora; los anteriores sin usar → Usado = 1.
+#   - SesionesUsuario: todas las sesiones de ese usuario con Revocada = 1.
+#   - CorreosEnCola: todavía SIN fila nueva.
+
+### 2. Su sesión anterior deja de servir
+GET http://localhost:5000/api/auth/yo
+Authorization: Bearer <token-S1>
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### 3. Su contraseña anterior deja de servir
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{"correo": "<correo-del-usuario>", "contrasena": "<su-contraseña-anterior>"}
+
+#   Esperado: HTTP 401 {"mensaje":"Credenciales inválidas."}
+
+### 4. Id inexistente
+POST http://localhost:5000/api/usuarios/99999/forzar-restablecimiento
+Authorization: Bearer <token-del-administrador>
+
+#   Esperado: HTTP 404 {"mensaje":"No existe un usuario con ese id."}
+
+### 5. Un Estándar lo intenta
+POST http://localhost:5000/api/usuarios/<id>/forzar-restablecimiento
+Authorization: Bearer <token-de-un-estándar>
+
+#   Esperado: HTTP 403 {"mensaje":"No tienes permiso para ejecutar esta operación. Se requiere el rol Administrador."}
+
+### 6. Sin sesión
+POST http://localhost:5000/api/usuarios/<id>/forzar-restablecimiento
+
+#   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

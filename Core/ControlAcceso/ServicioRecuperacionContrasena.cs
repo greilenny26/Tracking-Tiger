@@ -45,14 +45,7 @@ public sealed class ServicioRecuperacionContrasena
         // Solo un usuario existente y ACTIVO recibe código.
         if (usuario is { Activo: true })
         {
-            // RF-CA-10: los códigos anteriores sin usar dejan de servir.
-            var anteriores = await _contexto.CodigosRecuperacion
-                .Where(c => c.UsuarioId == usuario.Id && !c.Usado)
-                .ToListAsync();
-            foreach (var anterior in anteriores)
-                anterior.MarcarUsado();
-
-            _contexto.CodigosRecuperacion.Add(CodigoRecuperacion.Emitir(usuario, codigoHash, _reloj.AhoraUtc));
+            await EmitirCodigoAsync(usuario, codigoHash);
 
             // El correo solo se registra en la cola (RF-NOT-08): nunca se contacta a SMTP aquí y la
             // operación termina bien aunque el servidor de correo esté caído. Lo envía "enviar-correos".
@@ -74,6 +67,49 @@ public sealed class ServicioRecuperacionContrasena
         }
 
         return ResultadoSolicitudRecuperacion.Aceptada();
+    }
+
+    // RF-CA-13: un Administrador fuerza el restablecimiento. En UNA transacción: la contraseña anterior
+    // deja de servir (se reemplaza por el hash de un secreto aleatorio que nadie conoce, nunca vacío),
+    // se revocan TODAS las sesiones del usuario y se emite un código de recuperación con las mismas
+    // reglas. El código en claro solo vive en memoria; todavía no se envía.
+    public async Task<ResultadoForzarRestablecimiento> ForzarRestablecimientoAsync(int usuarioId)
+    {
+        await using var transaccion = await _contexto.Database.BeginTransactionAsync();
+
+        var usuario = await _contexto.Usuarios.SingleOrDefaultAsync(u => u.Id == usuarioId);
+        if (usuario is null)
+            return ResultadoForzarRestablecimiento.NoEncontrado();
+
+        usuario.CambiarContrasena(_hasher.Hashear(GeneradorTokens.GenerarToken()));
+
+        var codigoPlano = GeneradorTokens.GenerarToken();
+        await EmitirCodigoAsync(usuario, GeneradorTokens.CalcularHash(codigoPlano));
+
+        await _contexto.SaveChangesAsync();
+
+        await _contexto.SesionesUsuario
+            .Where(s => s.UsuarioId == usuarioId && !s.Revocada)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Revocada, true));
+
+        await transaccion.CommitAsync();
+
+        return ResultadoForzarRestablecimiento.Forzado(new UsuarioListado(
+            usuario.Id, usuario.Nombre, usuario.Correo, usuario.Rol.ToString(), usuario.Activo));
+    }
+
+    // RF-CA-10: única regla de emisión de códigos. Marca como usados los códigos anteriores sin usar del
+    // usuario y agrega el nuevo (vence en CodigoRecuperacion.Vigencia). No guarda: entra en el
+    // SaveChanges de quien llama.
+    private async Task EmitirCodigoAsync(Usuario usuario, string codigoHash)
+    {
+        var anteriores = await _contexto.CodigosRecuperacion
+            .Where(c => c.UsuarioId == usuario.Id && !c.Usado)
+            .ToListAsync();
+        foreach (var anterior in anteriores)
+            anterior.MarcarUsado();
+
+        _contexto.CodigosRecuperacion.Add(CodigoRecuperacion.Emitir(usuario, codigoHash, _reloj.AhoraUtc));
     }
 
     // RF-CA-11: con un código válido define la contraseña nueva. Un código desconocido, ya usado o
