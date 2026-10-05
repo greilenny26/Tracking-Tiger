@@ -93,6 +93,10 @@ public sealed class ServicioAdministracionUsuarios
         if (usuario is null)
             return ResultadoReactivacion.NoEncontrado();
 
+        // RF-CA-20: si nunca activó su cuenta por correo, reactivar no la activa (no se salta ese paso).
+        if (!usuario.Activo && !usuario.Desactivado)
+            return ResultadoReactivacion.SinActivarPorCorreo();
+
         usuario.Reactivar();
         await _contexto.SaveChangesAsync();
 

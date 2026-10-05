@@ -44,7 +44,8 @@ public sealed class ServicioReenvioActivacion
         // La búsqueda se hace siempre, exista o no el correo, y no hay retorno anticipado:
         // todos los casos terminan en la misma respuesta (RF-CA-17).
         var usuario = await _contexto.Usuarios.SingleOrDefaultAsync(u => u.Correo == correoNormalizado);
-        var debeReenviar = usuario is { Activo: false };
+        // RF-CA-20: una cuenta desactivada por un Administrador no recibe enlace (no puede reactivarse sola).
+        var debeReenviar = usuario is { Activo: false, Desactivado: false };
 
         if (debeReenviar)
         {

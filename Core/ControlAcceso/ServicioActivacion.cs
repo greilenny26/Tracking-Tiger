@@ -31,7 +31,8 @@ public sealed class ServicioActivacion
 
         // Las comprobaciones van antes de cualquier cambio: un rechazo no modifica nada en la base.
         // Un enlace reemplazado por un reenvío (RF-CA-17) se trata como no válido.
-        if (token is null || token.Invalidado)
+        // RF-CA-20: un enlace de una cuenta desactivada por un Administrador tampoco sirve.
+        if (token is null || token.Invalidado || token.Usuario.Desactivado)
             return ResultadoActivacion.EnlaceInvalido();
 
         // Un solo uso (RF-CA-16): abrir el enlace por segunda vez se rechaza.

@@ -85,6 +85,10 @@ public sealed class ServicioSesion
         // RF-CA-15: la cuenta sin activar se informa SOLO cuando la contraseña ya es correcta. Con una
         // contraseña incorrecta sale el 401 genérico de arriba, así quien no conoce la contraseña
         // no puede averiguar el estado de una cuenta.
+        // RF-CA-20: con la contraseña correcta, una cuenta desactivada por un Administrador recibe su propio mensaje.
+        if (usuario.Desactivado)
+            return ResultadoInicioSesion.CuentaDesactivada();
+
         if (!usuario.Activo)
             return ResultadoInicioSesion.CuentaInactiva();
 
