@@ -1132,8 +1132,8 @@ Content-Type: application/json
 ### ------------------------------------------------------------
 # Antes: pedir un código con POST /api/auth/recuperar (usuario activo con contraseña "Clave1234")
 # y copiarlo del correo recibido (o del Cuerpo en CorreosEnCola).
-# Por ahora solo el camino feliz: todavía se aceptan un código ya usado o vencido, no se aplica
-# la política de contraseña y las sesiones abiertas siguen válidas (llegan en pasos aparte).
+# Todavía se acepta un código vencido, no se aplica la política de contraseña y las sesiones
+# abiertas siguen válidas (llegan en pasos aparte).
 
 ### 1. Código válido
 POST http://localhost:5000/api/auth/restablecer
@@ -1170,6 +1170,16 @@ Content-Type: application/json
 {"codigo": "<código>", "nuevaContrasena": ""}
 
 #   Esperado: HTTP 400 {"mensaje":"La contraseña nueva es obligatoria."}. El código no se marca como usado.
+
+### 5. Código ya usado (repetir el caso 1 con el MISMO código)
+POST http://localhost:5000/api/auth/restablecer
+Content-Type: application/json
+
+{"codigo": "<código-ya-usado-en-el-caso-1>", "nuevaContrasena": "OtraClave77"}
+
+#   Esperado: HTTP 400 {"mensaje":"El código no es válido, ya fue usado o venció."}
+#   La contraseña NO cambia: login con "OtraClave77" → 401; con "NuevaClave99" → 200.
+#   Lo mismo con un código anterior que quedó Usado = 1 al pedir uno nuevo.
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
