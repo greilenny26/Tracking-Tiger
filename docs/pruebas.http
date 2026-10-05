@@ -972,6 +972,15 @@ POST http://localhost:5000/api/usuarios/<id>/desactivar
 
 #   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
 
+### 7. El Administrador intenta desactivarse a sí mismo
+POST http://localhost:5000/api/usuarios/<id-del-propio-administrador>/desactivar
+Authorization: Bearer <token-del-administrador>
+
+#   Esperado: HTTP 400 {"mensaje":"No puedes desactivar tu propia cuenta."}
+#   En DB Browser nada cambia: su Activo sigue en 1 y sus sesiones siguen abiertas (Revocada = 0);
+#   su token sigue funcionando (GET /api/auth/yo → 200).
+#   Desactivar a OTRO usuario sigue funcionando (caso 1).
+
 ### ------------------------------------------------------------
 ### RF-CA-20 — Reactivar usuario: POST /api/usuarios/{id}/reactivar (solo Administrador)
 ### ------------------------------------------------------------

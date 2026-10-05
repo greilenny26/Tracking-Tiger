@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
@@ -35,16 +36,23 @@ public sealed class ControladorUsuarios : ControllerBase
         };
     }
 
-    // RF-CA-20: 200 con el usuario desactivado, 404 si el id no existe.
+    // RF-CA-20: 200 con el usuario desactivado, 400 si es la propia cuenta, 404 si el id no existe.
     [Operacion(CatalogoOperaciones.DesactivarUsuario)]
     [HttpPost("{id:int}/desactivar")]
     public async Task<IActionResult> Desactivar(int id)
     {
-        var resultado = await _servicio.DesactivarAsync(id);
+        // El filtro ya garantizó una sesión válida; el id sale de esa sesión (claim del servidor).
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var idSolicitante))
+            return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
 
-        return resultado.Estado == EstadoDesactivacion.Desactivado
-            ? Ok(new { mensaje = resultado.Mensaje, usuario = resultado.Usuario })
-            : NotFound(new { mensaje = resultado.Mensaje });
+        var resultado = await _servicio.DesactivarAsync(id, idSolicitante);
+
+        return resultado.Estado switch
+        {
+            EstadoDesactivacion.Desactivado => Ok(new { mensaje = resultado.Mensaje, usuario = resultado.Usuario }),
+            EstadoDesactivacion.PropioUsuario => BadRequest(new { mensaje = resultado.Mensaje }),
+            _ => NotFound(new { mensaje = resultado.Mensaje })
+        };
     }
 
     // RF-CA-20: 200 con el usuario reactivado, 404 si el id no existe.

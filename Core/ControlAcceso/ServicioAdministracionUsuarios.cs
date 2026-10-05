@@ -59,8 +59,13 @@ public sealed class ServicioAdministracionUsuarios
     // RF-CA-20: desactiva al usuario y revoca TODAS sus sesiones abiertas en una sola transacción:
     // o quedan ambas cosas o ninguna. Desde la siguiente petición sus credenciales dejan de servir
     // (el esquema de sesión rechaza sesiones revocadas y usuarios inactivos) y no puede iniciar sesión.
-    public async Task<ResultadoDesactivacion> DesactivarAsync(int usuarioId)
+    public async Task<ResultadoDesactivacion> DesactivarAsync(int usuarioId, int idSolicitante)
     {
+        // RF-CA-20: el id de quien pide la operación viene de la sesión del servidor, nunca del cliente.
+        // Se compara antes de tocar nada: si es la propia cuenta no se abre la transacción ni se revoca nada.
+        if (usuarioId == idSolicitante)
+            return ResultadoDesactivacion.PropioUsuario();
+
         await using var transaccion = await _contexto.Database.BeginTransactionAsync();
 
         var usuario = await _contexto.Usuarios.SingleOrDefaultAsync(u => u.Id == usuarioId);
