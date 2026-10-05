@@ -1040,6 +1040,45 @@ POST http://localhost:5000/api/usuarios/<id>/reactivar
 #   La solicitud de recuperación que crea filas aquí llega en un paso posterior.
 
 ### ------------------------------------------------------------
+### RF-CA-09 — Solicitar recuperación de contraseña: POST /api/auth/recuperar (pública)
+### ------------------------------------------------------------
+# Los casos 1 y 2 deben responder EXACTAMENTE igual (mismo código y mismo JSON): el flujo no revela
+# qué correos están registrados. Todavía no se genera ningún código: no se crean filas en
+# CodigosRecuperacion ni en CorreosEnCola.
+
+### 1. Correo registrado
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": "<correo-registrado>"}
+
+#   Esperado: HTTP 200 {"mensaje":"Si el correo está registrado, recibirás instrucciones para recuperar tu contraseña."}
+
+### 2. Correo no registrado
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": "nadie@example.com"}
+
+#   Esperado: el MISMO HTTP 200 con el mismo cuerpo, byte por byte, que el caso 1.
+
+### 3. Correo mal formado
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": "no-es-correo"}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo no tiene un formato válido."}
+
+### 4. Correo vacío o ausente
+POST http://localhost:5000/api/auth/recuperar
+Content-Type: application/json
+
+{"correo": ""}
+
+#   Esperado: HTTP 400 {"mensaje":"El correo es obligatorio."}. Igual con {}.
+
+### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
 ### ------------------------------------------------------------
 # Todavía no hay endpoints propios. Se verificó con un endpoint temporal (ya borrado)

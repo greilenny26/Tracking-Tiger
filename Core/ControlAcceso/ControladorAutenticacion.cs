@@ -13,14 +13,17 @@ public sealed class ControladorAutenticacion : ControllerBase
     private readonly ServicioActivacion _servicioActivacion;
     private readonly ServicioReenvioActivacion _servicioReenvio;
     private readonly ServicioSesion _servicioSesion;
+    private readonly ServicioRecuperacionContrasena _servicioRecuperacion;
 
     public ControladorAutenticacion(ServicioRegistro servicioRegistro, ServicioActivacion servicioActivacion,
-        ServicioReenvioActivacion servicioReenvio, ServicioSesion servicioSesion)
+        ServicioReenvioActivacion servicioReenvio, ServicioSesion servicioSesion,
+        ServicioRecuperacionContrasena servicioRecuperacion)
     {
         _servicioRegistro = servicioRegistro;
         _servicioActivacion = servicioActivacion;
         _servicioReenvio = servicioReenvio;
         _servicioSesion = servicioSesion;
+        _servicioRecuperacion = servicioRecuperacion;
     }
 
     // RF-CA-01: 201 con los datos públicos del usuario, 400 si los datos no son válidos,
@@ -121,5 +124,17 @@ public sealed class ControladorAutenticacion : ControllerBase
 
         await _servicioSesion.CerrarSesionAsync(sesionId);
         return Ok(new { mensaje = "Sesión cerrada correctamente." });
+    }
+
+    // RF-CA-09: 200 con la misma respuesta para cualquier correo bien formado; 400 solo si el formato no es válido.
+    [Operacion(CatalogoOperaciones.SolicitarRecuperacion)]
+    [HttpPost("recuperar")]
+    public async Task<IActionResult> SolicitarRecuperacion([FromBody] SolicitudRecuperacion solicitud)
+    {
+        var resultado = await _servicioRecuperacion.SolicitarAsync(solicitud.Correo);
+
+        return resultado.Estado == EstadoSolicitudRecuperacion.Aceptada
+            ? Ok(new { mensaje = resultado.Mensaje })
+            : BadRequest(new { mensaje = resultado.Mensaje });
     }
 }
