@@ -32,7 +32,7 @@
 
 ## Código
 - Clases, métodos, propiedades, mensajes al usuario y comentarios en español.
-- Estructura: carpeta Core/ y carpeta Negocio/. Core NUNCA referencia a Negocio (RD-03).
+- Estructura: la aplicación vive en src/TrackingTiger (Core/ y Negocio/); las pruebas en tests/TrackingTiger.Pruebas. Core NUNCA referencia a Negocio (RD-03).
 - La lógica de negocio no va en los controladores/endpoints (RD-02).
 - Toda fecha se toma de un reloj único en UTC (RD-11).
 - No leas ni imprimas `.env.cmd`. Nunca escribas credenciales en el código ni en documentos.

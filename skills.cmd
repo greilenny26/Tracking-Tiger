@@ -34,8 +34,8 @@ GOTO Unknown
         echo [ERROR] Debes especificar un nombre para la migracion. Ejemplo: .\skills.cmd db-migrate AddUserTable
         EXIT /B 1
     )
-    dotnet ef migrations add %2
-    dotnet ef database update
+    dotnet ef migrations add %2 --project src/TrackingTiger
+    dotnet ef database update --project src/TrackingTiger
     EXIT /B %ERRORLEVEL%
 
 :RunTests
