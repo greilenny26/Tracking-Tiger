@@ -219,6 +219,54 @@ namespace Tracking_Tiger.Migrations
                     b.ToTable("CorreosEnCola", (string)null);
                 });
 
+            modelBuilder.Entity("Tracking_Tiger.Core.Permisos.SolicitudPermiso", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("AprobadorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FechaResolucion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MotivoRechazo")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PermisoSolicitado")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("RechazadaPorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SolicitanteId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AprobadorId");
+
+                    b.HasIndex("Estado");
+
+                    b.HasIndex("RechazadaPorId");
+
+                    b.HasIndex("SolicitanteId");
+
+                    b.ToTable("SolicitudesPermiso", (string)null);
+                });
+
             modelBuilder.Entity("Tracking_Tiger.Negocio.Alertas.AlertaFraude", b =>
                 {
                     b.Property<int>("Id")
@@ -298,6 +346,25 @@ namespace Tracking_Tiger.Migrations
                         .IsRequired();
 
                     b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("Tracking_Tiger.Core.Permisos.SolicitudPermiso", b =>
+                {
+                    b.HasOne("Tracking_Tiger.Core.ControlAcceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("AprobadorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Tracking_Tiger.Core.ControlAcceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("RechazadaPorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Tracking_Tiger.Core.ControlAcceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("SolicitanteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }
