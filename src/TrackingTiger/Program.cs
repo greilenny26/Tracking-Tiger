@@ -22,8 +22,14 @@ builder.Services.AddExceptionHandler<ManejadorErroresGlobal>();
 builder.Services.AddSingleton<IReloj, RelojSistema>();
 builder.Services.AddSingleton<IHasherContrasenas, HasherContrasenasPbkdf2>();
 
+// RD-09: la ruta de la base de datos se lee de DB_RUTA; si no existe, se usa
+// trackingtiger.db en la carpeta del proyecto, sin depender de desde dónde se ejecute.
+var rutaBaseDatos = Environment.GetEnvironmentVariable("DB_RUTA");
+if (string.IsNullOrWhiteSpace(rutaBaseDatos))
+    rutaBaseDatos = Path.Combine(builder.Environment.ContentRootPath, "trackingtiger.db");
+
 builder.Services.AddDbContext<ContextoDatos>(opciones =>
-opciones.UseSqlite("Data Source=trackingtiger.db"));
+    opciones.UseSqlite($"Data Source={rutaBaseDatos}"));
 
 builder.Services.AddScoped<EmisorActivacion>();
 builder.Services.AddScoped<ServicioRegistro>();
