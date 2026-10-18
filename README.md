@@ -2,8 +2,8 @@
 
 Sistema antifraude para tarjetas de débito y crédito. API web en ASP.NET Core (.NET 10) con EF Core + SQLite.
 
-- **Core** (`Core/`): Control de acceso (registro, activación por correo, sesión, roles, administración de usuarios, recuperación de contraseña) y la cola mínima de correos.
-- **Negocio** (`Negocio/`): alertas de fraude con su máquina de estados (ver `docs/maquina-de-estados.md`). El Core no depende del Negocio (RD-03).
+- **Core** (`src/TrackingTiger/Core/`): Control de acceso (registro, activación por correo, sesión, roles, administración de usuarios, recuperación de contraseña) y la cola mínima de correos.
+- **Negocio** (`src/TrackingTiger/Negocio/`): alertas de fraude con su máquina de estados (ver `docs/maquina-de-estados.md`). El Core no depende del Negocio (RD-03).
 
 Todos los casos de prueba manuales, con la petición y el resultado esperado, están en **`docs/pruebas.http`** (se ejecuta con la extensión REST Client de VS Code o copiando las peticiones a cualquier cliente HTTP).
 
@@ -36,7 +36,7 @@ Las credenciales **nunca** están en el repositorio (RD-10): se leen de variable
 | `APP_URL_BASE` | URL base de la API para armar el enlace de activación, por ejemplo `http://localhost:5000`. | Para registrar usuarios |
 | `ADMIN_CORREO_INICIAL` | Correo del primer Administrador (comando `crear-admin`). | Para `crear-admin` |
 | `ADMIN_CLAVE_INICIAL` | Contraseña del primer Administrador (mínimo 8 caracteres, con letras y números). | Para `crear-admin` |
-
+| `DB_RUTA` | Ruta del archivo de la base de datos SQLite. Vacío → `src\TrackingTiger\trackingtiger.db`. | No |
 Crear `.env.cmd` en la raíz del proyecto (formato CMD, sin espacios alrededor del `=`):
 
 ```
@@ -62,26 +62,26 @@ call .env.cmd
 
 ```
 call .env.cmd
-dotnet run
+dotnet run --project src/TrackingTiger
 ```
 
 - Al iniciar se aplican automáticamente todas las migraciones pendientes (RD-09): un clon nuevo crea `trackingtiger.db` desde cero, sin pasos manuales.
 - La API queda en `http://localhost:5000` (la consola muestra `Now listening on: http://localhost:5000`). Para detenerla: `Ctrl+C`.
-- Los datos persisten en `trackingtiger.db`: reiniciar la aplicación no pierde usuarios (RD-09).
+- Los datos persisten en `src\TrackingTiger\trackingtiger.db`, o en la ruta indicada en `DB_RUTA`. La ruta no depende de la carpeta desde donde se ejecute el comando: reiniciar la aplicación no pierde datos (RD-09).
 
 ### Comandos aparte (no levantan el servidor web)
 
 | Comando | Qué hace |
 |---|---|
-| `dotnet run -- crear-admin` | Crea el primer Administrador (activo) con `ADMIN_CORREO_INICIAL` / `ADMIN_CLAVE_INICIAL`. Si el correo ya existe no cambia nada. |
-| `dotnet run -- enviar-correos` | Proceso independiente que envía por SMTP los correos pendientes de la cola y los marca como enviados (RF-NOT-09). Ejecutarlo dos veces no duplica envíos (RF-NOT-12). |
-| `dotnet run -- encolar-prueba <correo>` | Encola un correo de prueba (solo para probar la cola). |
+| `dotnet run --project src/TrackingTiger -- crear-admin` | Crea el primer Administrador (activo) con `ADMIN_CORREO_INICIAL` / `ADMIN_CLAVE_INICIAL`. Si el correo ya existe no cambia nada. |
+| `dotnet run --project src/TrackingTiger -- enviar-correos` | Proceso independiente que envía por SMTP los correos pendientes de la cola y los marca como enviados (RF-NOT-09). Ejecutarlo dos veces no duplica envíos (RF-NOT-12). |
+| `dotnet run --project src/TrackingTiger -- encolar-prueba <correo>` | Encola un correo de prueba (solo para probar la cola). |
 
-**Importante:** la API nunca envía correos dentro de la operación (RF-NOT-08). Después de registrarse, pedir recuperación o forzar un restablecimiento, ejecutar `dotnet run -- enviar-correos` en **otra** terminal CMD (con `call .env.cmd`) para que el correo llegue.
+**Importante:** la API nunca envía correos dentro de la operación (RF-NOT-08). Después de registrarse, pedir recuperación o forzar un restablecimiento, ejecutar `dotnet run --project src/TrackingTiger -- enviar-correos` en **otra** terminal CMD (con `call .env.cmd`) para que el correo llegue.
 
 ## Endpoints
 
-Quién puede ejecutar cada operación está declarado en un solo lugar: `Core/ControlAcceso/CatalogoOperaciones.cs` (RF-CA-05). La verificación ocurre en el servidor en cada petición (RD-06). La credencial de sesión se envía como `Authorization: Bearer <token>`.
+Quién puede ejecutar cada operación está declarado en un solo lugar: `src/TrackingTiger/Core/ControlAcceso/CatalogoOperaciones.cs` (RF-CA-05). La verificación ocurre en el servidor en cada petición (RD-06). La credencial de sesión se envía como `Authorization: Bearer <token>`.
 
 | Método y ruta | Acceso | Cuerpo |
 |---|---|---|
@@ -106,14 +106,14 @@ Pasos en el orden de la revisión. Las peticiones exactas y los resultados esper
 
 ### Preparación
 
-1. Terminal A (CMD): `call .env.cmd` y `dotnet run`.
-2. Terminal B (CMD): `call .env.cmd` y `dotnet run -- crear-admin` → "Se creó el Administrador inicial…". Este usuario es el Administrador.
+1. Terminal A (CMD): `call .env.cmd` y `dotnet run --project src/TrackingTiger`.
+2. Terminal B (CMD): `call .env.cmd` y `dotnet run --project src/TrackingTiger -- crear-admin` → "Se creó el Administrador inicial…". Este usuario es el Administrador.
 
 ### Registro y activación (RF-CA-01, 02, 14, 15, 16, 17)
 
 1. Registrarse con un correo propio: `POST /api/auth/registro` → **201** "La cuenta se creó, pero todavía no está activa…" (RF-CA-01).
 2. Iniciar sesión antes de activar: `POST /api/auth/login` con la contraseña correcta → **403** "La cuenta no está activa. Revisa tu correo para activarla." (RF-CA-15).
-3. Terminal B: `dotnet run -- enviar-correos` → llega el correo "Activa tu cuenta de Tracking Tiger" con el enlace.
+3. Terminal B: `dotnet run --project src/TrackingTiger -- enviar-correos` → llega el correo "Activa tu cuenta de Tracking Tiger" con el enlace.
 4. Abrir el enlace → **200** "Tu cuenta se activó correctamente…". Ahora el login funciona (RF-CA-16).
 5. Abrir el enlace por segunda vez → **400** "Este enlace de activación ya fue usado." y nada cambia (RF-CA-16). Un enlace vencido → "El enlace de activación ya venció."
 6. Registrar el mismo correo otra vez (con mayúsculas o espacios también) → **409** "Ya existe una cuenta registrada con ese correo." (RF-CA-01).
@@ -143,7 +143,7 @@ Pasos en el orden de la revisión. Las peticiones exactas y los resultados esper
 ### Contraseñas (RF-CA-09, 10, 11, 12, 13, 22)
 
 1. `POST /api/auth/recuperar` con un correo inexistente y con uno existente → **misma** respuesta 200 "Si el correo está registrado…" (RF-CA-09).
-2. Terminal B: `dotnet run -- enviar-correos` → llega el correo con el código (vence en 1 hora, un solo uso) (RF-CA-10).
+2. Terminal B: `dotnet run --project src/TrackingTiger -- enviar-correos` → llega el correo con el código (vence en 1 hora, un solo uso) (RF-CA-10).
 3. `POST /api/auth/restablecer` con `{"codigo","nuevaContrasena"}` → **200**. Usar el mismo código otra vez → **400** "El código no es válido, ya fue usado o venció." y la contraseña no cambia (RF-CA-10, 11).
 4. Login con la contraseña vieja → **401**; con la nueva → **200** (RF-CA-11).
 5. Un token emitido antes del restablecimiento → **401** en `GET /api/auth/yo` (RF-CA-12).
@@ -153,30 +153,33 @@ Pasos en el orden de la revisión. Las peticiones exactas y los resultados esper
 ### Correo por cola (RF-NOT-08, 09, 12, 13)
 
 1. Apagar el acceso a SMTP (por ejemplo, terminal sin `call .env.cmd` o con `set SMTP_HOST=localhost` y `set SMTP_PORT=2599`) y registrar un usuario → **201** de inmediato; en DB Browser el correo queda en `CorreosEnCola` con `Estado = Pendiente` (RF-NOT-08).
-2. Con las variables correctas: `dotnet run -- enviar-correos` → el correo llega y pasa a `Enviado` (RF-NOT-09). Ejecutarlo otra vez → "No hay correos pendientes." y no se duplica nada (RF-NOT-12).
+2. Con las variables correctas: `dotnet run --project src/TrackingTiger -- enviar-correos` → el correo llega y pasa a `Enviado` (RF-NOT-09). Ejecutarlo otra vez → "No hay correos pendientes." y no se duplica nada (RF-NOT-12).
 3. Las credenciales SMTP solo vienen de variables de entorno; no hay ninguna en el repositorio ni en el historial (RF-NOT-13, RD-10).
 
 ### Persistencia (RD-09)
 
-Detener la API (`Ctrl+C`) y volver a ejecutar `dotnet run`: los usuarios siguen ahí.
+Detener la API (`Ctrl+C`) y volver a ejecutar `dotnet run --project src/TrackingTiger`: los usuarios siguen ahí.
 
 ### Máquina de estados del negocio (RF-NEG-03, 04, 05, RD-04)
 
-- Estados en un solo lugar: `Negocio/Alertas/EstadoAlerta.cs`.
-- Transiciones en un solo lugar, con prohibidas explícitas y estados terminales: `Negocio/Alertas/MaquinaEstadosAlerta.cs`.
+- Estados en un solo lugar: `src/TrackingTiger/Negocio/Alertas/EstadoAlerta.cs`.
+- Transiciones en un solo lugar, con prohibidas explícitas y estados terminales: `src/TrackingTiger/Negocio/Alertas/MaquinaEstadosAlerta.cs`.
 - Tabla de transiciones: `docs/maquina-de-estados.md`.
 
 ## Estructura
 
 ```
-Core/                 Control de acceso, correo, persistencia y web (no depende de Negocio)
-  ControlAcceso/      Usuarios, sesiones, roles, catálogo de operaciones, recuperación
-  Correo/             Cola de correos y enviador SMTP
-  Persistencia/       ContextoDatos (EF Core + SQLite)
-  Web/                Manejo global de errores (RD-08)
-Negocio/Alertas/      AlertaFraude y su máquina de estados
-Migrations/           Migraciones de EF Core (se aplican solas al iniciar)
-docs/                 pruebas.http, maquina-de-estados.md, requisitos y bitácora
+TrackingTiger.sln         Solución: agrupa la aplicación y sus pruebas (dotnet build / dotnet test)
+src/TrackingTiger/        La aplicación
+  Core/                   Control de acceso, correo, persistencia y web (no depende de Negocio)
+    ControlAcceso/        Usuarios, sesiones, roles, catálogo de operaciones, recuperación
+    Correo/               Cola de correos y enviador SMTP
+    Persistencia/         ContextoDatos (EF Core + SQLite)
+    Web/                  Manejo global de errores (RD-08)
+  Negocio/Alertas/        AlertaFraude y su máquina de estados
+  Migrations/             Migraciones de EF Core (se aplican solas al iniciar)
+tests/TrackingTiger.Pruebas/  Pruebas automatizadas con xUnit (RD-12)
+docs/                     pruebas.http, maquina-de-estados.md, requisitos y bitácoras
 ```
 
 ## Notas
