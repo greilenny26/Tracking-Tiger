@@ -41,7 +41,8 @@ public static class CatalogoOperaciones
         [CambiarContrasenaPropia] = ExigenciaAcceso.Autenticada,
         [SolicitarRecuperacion]  = ExigenciaAcceso.Publica,
         [Restablecer]            = ExigenciaAcceso.Publica,
-        [ListarUsuarios]         = ExigenciaAcceso.DeRol(Rol.Administrador),
+        // RF-GP-05: solicitable. La ejecuta el Administrador o quien tenga un permiso aprobado y vigente.
+        [ListarUsuarios]         = ExigenciaAcceso.DeRolOPermiso(Rol.Administrador),
         [CambiarRol]             = ExigenciaAcceso.DeRol(Rol.Administrador),
         [DesactivarUsuario]      = ExigenciaAcceso.DeRol(Rol.Administrador),
         [ReactivarUsuario]       = ExigenciaAcceso.DeRol(Rol.Administrador),
@@ -60,7 +61,9 @@ public enum TipoExigencia
 {
     Publica,
     Autenticada,
-    Rol
+    Rol,
+    // RF-GP-05: el rol indicado, o cualquier usuario con un permiso otorgado y vigente para la operación.
+    RolOPermiso
 }
 
 // Quién puede ejecutar una operación: cualquiera, cualquier usuario con sesión, o solo un rol concreto.
@@ -69,4 +72,5 @@ public sealed record ExigenciaAcceso(TipoExigencia Tipo, Rol? RolRequerido = nul
     public static readonly ExigenciaAcceso Publica = new(TipoExigencia.Publica);
     public static readonly ExigenciaAcceso Autenticada = new(TipoExigencia.Autenticada);
     public static ExigenciaAcceso DeRol(Rol rol) => new(TipoExigencia.Rol, rol);
+    public static ExigenciaAcceso DeRolOPermiso(Rol rol) => new(TipoExigencia.RolOPermiso, rol);
 }
