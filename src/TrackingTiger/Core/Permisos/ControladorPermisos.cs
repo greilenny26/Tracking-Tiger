@@ -52,6 +52,25 @@ public sealed class ControladorPermisos : ControllerBase
         return Ok(await _servicio.ListarDeUsuarioAsync(usuarioId));
     }
 
+    // RF-GP-04: 200 con la solicitud Rechazada; 400 si falta el motivo, no está Pendiente o es propia
+    // (RF-GP-06, RF-GP-07), y entonces la solicitud no cambia; 404 si el id no existe.
+    [Operacion(CatalogoOperaciones.RechazarSolicitud)]
+    [HttpPost("{id:int}/rechazar")]
+    public async Task<IActionResult> Rechazar(int id, [FromBody] SolicitudRechazarPermiso cuerpo)
+    {
+        if (!TryObtenerUsuarioId(out var usuarioId))
+            return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
+
+        return Responder(await _servicio.RechazarAsync(id, usuarioId, cuerpo.Motivo));
+    }
+
+    private IActionResult Responder(ResultadoResolucionSolicitud resultado) => resultado.Estado switch
+    {
+        EstadoResolucion.Resuelta => Ok(resultado.Solicitud),
+        EstadoResolucion.NoEncontrada => NotFound(new { mensaje = resultado.Mensaje }),
+        _ => BadRequest(new { mensaje = resultado.Mensaje })
+    };
+
     // El filtro ya garantizó una sesión válida; el id sale de esa sesión (claim del servidor).
     private bool TryObtenerUsuarioId(out int usuarioId) =>
         int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out usuarioId);
@@ -59,3 +78,6 @@ public sealed class ControladorPermisos : ControllerBase
 
 // Cuerpo JSON de POST /api/permisos/solicitudes. Admite null para dar un mensaje controlado (RD-07).
 public sealed record SolicitudCrearPermiso(string? Permiso);
+
+// Cuerpo JSON de POST /api/permisos/solicitudes/{id}/rechazar (RF-GP-04).
+public sealed record SolicitudRechazarPermiso(string? Motivo);

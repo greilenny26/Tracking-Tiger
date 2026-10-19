@@ -23,6 +23,7 @@ public static class CatalogoOperaciones
     public const string CrearSolicitudPermiso = "crear-solicitud-permiso";
     public const string ConsultarSolicitudesPendientes = "solicitudes-pendientes";
     public const string ConsultarMisSolicitudes = "mis-solicitudes";
+    public const string RechazarSolicitud = "rechazar-solicitud";
 
     // Gestión de permisos: operaciones que un usuario Estándar puede pedir con una solicitud. Nunca se
     // incluyen las que administran usuarios, roles o solicitudes: aprobar una de esas dejaría que alguien
@@ -50,6 +51,8 @@ public static class CatalogoOperaciones
         // RF-GP-02: el Administrador ve las pendientes de todos; cada usuario, solo las suyas.
         [ConsultarSolicitudesPendientes] = ExigenciaAcceso.DeRol(Rol.Administrador),
         [ConsultarMisSolicitudes] = ExigenciaAcceso.Autenticada,
+        // RF-GP-04: solo el Administrador resuelve; que no sea su propia solicitud lo decide la máquina (RF-GP-07).
+        [RechazarSolicitud]      = ExigenciaAcceso.DeRol(Rol.Administrador),
     };
 }
 

@@ -10,6 +10,9 @@ namespace Tracking_Tiger.Core.Permisos;
 // CatalogoOperaciones; los ids de usuario llegan siempre de la sesión del servidor, nunca del cliente.
 public sealed class ServicioSolicitudesPermiso
 {
+    // Igual al largo de la columna MotivoRechazo en ContextoDatos.
+    private const int LargoMaximoMotivo = 500;
+
     private readonly ContextoDatos _contexto;
     private readonly IReloj _reloj;
 
@@ -43,6 +46,26 @@ public sealed class ServicioSolicitudesPermiso
 
         var listado = (await ListarAsync(s => s.Id == solicitud.Id)).Single();
         return ResultadoCreacionSolicitud.Creada(listado);
+    }
+
+    // RF-GP-04: el Administrador rechaza una solicitud pendiente con un motivo escrito. La máquina de estados
+    // decide si se permite (motivo, estado, RF-GP-07); si no, la solicitud no cambia y no se guarda nada.
+    public async Task<ResultadoResolucionSolicitud> RechazarAsync(int solicitudId, int administradorId, string? motivo)
+    {
+        if (motivo is not null && motivo.Trim().Length > LargoMaximoMotivo)
+            return ResultadoResolucionSolicitud.DatoInvalido($"El motivo admite como máximo {LargoMaximoMotivo} caracteres.");
+
+        var solicitud = await _contexto.SolicitudesPermiso.SingleOrDefaultAsync(s => s.Id == solicitudId);
+        if (solicitud is null)
+            return ResultadoResolucionSolicitud.NoEncontrada();
+
+        var transicion = MaquinaEstadosSolicitud.IntentarTransicion(
+            solicitud, EstadoSolicitud.Rechazada, administradorId, _reloj.AhoraUtc, motivo);
+        if (!transicion.Exito)
+            return ResultadoResolucionSolicitud.NoPermitida(transicion.Mensaje);
+
+        await _contexto.SaveChangesAsync();
+        return ResultadoResolucionSolicitud.Resuelta((await ListarAsync(s => s.Id == solicitudId)).Single());
     }
 
     // RF-GP-02: solicitudes en Pendiente de todos los usuarios. Solo el Administrador llega aquí (catálogo).
