@@ -5,6 +5,7 @@ using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
 using Tracking_Tiger.Core.Persistencia;
 using Tracking_Tiger.Core.Web;
+using Tracking_Tiger.Core.Permisos;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +40,7 @@ builder.Services.AddScoped<ServicioSesion>();
 builder.Services.AddScoped<ServicioAdministradorInicial>();
 builder.Services.AddScoped<ServicioAdministracionUsuarios>();
 builder.Services.AddScoped<ServicioRecuperacionContrasena>();
+builder.Services.AddScoped<ServicioSolicitudesPermiso>();
 
 // Esquema de autenticación por defecto (RF-CA-07): valida la credencial de sesión; lo usa
 // FiltroAutorizacionOperaciones para las operaciones que exigen sesión o rol.

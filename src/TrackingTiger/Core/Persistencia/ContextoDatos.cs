@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
+using Tracking_Tiger.Core.Permisos;
 
 namespace Tracking_Tiger.Core.Persistencia;
 
@@ -17,6 +18,8 @@ public class ContextoDatos : DbContext
     public DbSet<TokenActivacion> TokensActivacion => Set<TokenActivacion>();
     public DbSet<SesionUsuario> SesionesUsuario => Set<SesionUsuario>();
     public DbSet<CodigoRecuperacion> CodigosRecuperacion => Set<CodigoRecuperacion>();
+    public DbSet<SolicitudPermiso> SolicitudesPermiso => Set<SolicitudPermiso>();
+    public DbSet<PermisoOtorgado> PermisosOtorgados => Set<PermisoOtorgado>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -104,6 +107,37 @@ public class ContextoDatos : DbContext
                 .WithMany()
                 .HasForeignKey(c => c.UsuarioId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SolicitudPermiso>(solicitud =>
+        {
+            solicitud.ToTable("SolicitudesPermiso");
+            solicitud.HasKey(s => s.Id);
+            solicitud.Property(s => s.PermisoSolicitado).IsRequired().HasMaxLength(50);
+            // El estado se guarda como texto ("Pendiente", "Aplicada"…), legible en DB Browser.
+            solicitud.Property(s => s.Estado).IsRequired().HasConversion<string>().HasMaxLength(20);
+            solicitud.Property(s => s.MotivoRechazo).HasMaxLength(500);
+            solicitud.Property(s => s.FechaCreacion).IsRequired();
+            // RF-GP-02: el Administrador consulta por estado; cada usuario consulta las suyas.
+            solicitud.HasIndex(s => s.Estado);
+            solicitud.HasIndex(s => s.SolicitanteId);
+            // Restrict: una solicitud es historial; borrar un usuario no debe borrarla en silencio.
+            solicitud.HasOne<Usuario>().WithMany().HasForeignKey(s => s.SolicitanteId).OnDelete(DeleteBehavior.Restrict);
+            solicitud.HasOne<Usuario>().WithMany().HasForeignKey(s => s.AprobadorId).OnDelete(DeleteBehavior.Restrict);
+            solicitud.HasOne<Usuario>().WithMany().HasForeignKey(s => s.RechazadaPorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PermisoOtorgado>(permiso =>
+        {
+            permiso.ToTable("PermisosOtorgados");
+            permiso.HasKey(p => p.Id);
+            permiso.Property(p => p.Operacion).IsRequired().HasMaxLength(50);
+            permiso.Property(p => p.FechaOtorgamiento).IsRequired();
+            permiso.Property(p => p.FechaVencimiento).IsRequired();
+            // RF-GP-05: en cada petición el filtro busca un permiso vigente por usuario y operación.
+            permiso.HasIndex(p => new { p.UsuarioId, p.Operacion });
+            permiso.HasOne<Usuario>().WithMany().HasForeignKey(p => p.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+            permiso.HasOne<SolicitudPermiso>().WithMany().HasForeignKey(p => p.SolicitudId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

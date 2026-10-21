@@ -20,6 +20,16 @@ public static class CatalogoOperaciones
     public const string DesactivarUsuario = "desactivar-usuario";
     public const string ReactivarUsuario = "reactivar-usuario";
     public const string ForzarRestablecimiento = "forzar-restablecimiento";
+    public const string CrearSolicitudPermiso = "crear-solicitud-permiso";
+    public const string ConsultarSolicitudesPendientes = "solicitudes-pendientes";
+    public const string ConsultarMisSolicitudes = "mis-solicitudes";
+    public const string AprobarSolicitud = "aprobar-solicitud";
+    public const string RechazarSolicitud = "rechazar-solicitud";
+
+    // Gestión de permisos: operaciones que un usuario Estándar puede pedir con una solicitud. Nunca se
+    // incluyen las que administran usuarios, roles o solicitudes: aprobar una de esas dejaría que alguien
+    // se diera más privilegios a sí mismo (escalada de privilegios).
+    public static readonly IReadOnlyList<string> OperacionesSolicitables = [ListarUsuarios];
 
     public static readonly IReadOnlyDictionary<string, ExigenciaAcceso> Exigencias = new Dictionary<string, ExigenciaAcceso>
     {
@@ -32,11 +42,20 @@ public static class CatalogoOperaciones
         [CambiarContrasenaPropia] = ExigenciaAcceso.Autenticada,
         [SolicitarRecuperacion]  = ExigenciaAcceso.Publica,
         [Restablecer]            = ExigenciaAcceso.Publica,
-        [ListarUsuarios]         = ExigenciaAcceso.DeRol(Rol.Administrador),
+        // RF-GP-05: solicitable. La ejecuta el Administrador o quien tenga un permiso aprobado y vigente.
+        [ListarUsuarios]         = ExigenciaAcceso.DeRolOPermiso(Rol.Administrador),
         [CambiarRol]             = ExigenciaAcceso.DeRol(Rol.Administrador),
         [DesactivarUsuario]      = ExigenciaAcceso.DeRol(Rol.Administrador),
         [ReactivarUsuario]       = ExigenciaAcceso.DeRol(Rol.Administrador),
         [ForzarRestablecimiento] = ExigenciaAcceso.DeRol(Rol.Administrador),
+        // RF-GP-01: solo un usuario Estándar crea solicitudes (el Administrador ya tiene acceso).
+        [CrearSolicitudPermiso]  = ExigenciaAcceso.DeRol(Rol.Estandar),
+        // RF-GP-02: el Administrador ve las pendientes de todos; cada usuario, solo las suyas.
+        [ConsultarSolicitudesPendientes] = ExigenciaAcceso.DeRol(Rol.Administrador),
+        [ConsultarMisSolicitudes] = ExigenciaAcceso.Autenticada,
+        // RF-GP-03, RF-GP-04: solo el Administrador resuelve; que no sea su propia solicitud lo decide la máquina (RF-GP-07).
+        [AprobarSolicitud]       = ExigenciaAcceso.DeRol(Rol.Administrador),
+        [RechazarSolicitud]      = ExigenciaAcceso.DeRol(Rol.Administrador),
     };
 }
 
@@ -44,7 +63,9 @@ public enum TipoExigencia
 {
     Publica,
     Autenticada,
-    Rol
+    Rol,
+    // RF-GP-05: el rol indicado, o cualquier usuario con un permiso otorgado y vigente para la operación.
+    RolOPermiso
 }
 
 // Quién puede ejecutar una operación: cualquiera, cualquier usuario con sesión, o solo un rol concreto.
@@ -53,4 +74,5 @@ public sealed record ExigenciaAcceso(TipoExigencia Tipo, Rol? RolRequerido = nul
     public static readonly ExigenciaAcceso Publica = new(TipoExigencia.Publica);
     public static readonly ExigenciaAcceso Autenticada = new(TipoExigencia.Autenticada);
     public static ExigenciaAcceso DeRol(Rol rol) => new(TipoExigencia.Rol, rol);
+    public static ExigenciaAcceso DeRolOPermiso(Rol rol) => new(TipoExigencia.RolOPermiso, rol);
 }

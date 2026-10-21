@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
+using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.Persistencia;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
@@ -21,11 +22,13 @@ public sealed class FiltroAutorizacionOperaciones : IAsyncAuthorizationFilter
 
     private readonly ContextoDatos _contexto;
     private readonly ILogger<FiltroAutorizacionOperaciones> _registro;
+    private readonly IReloj _reloj;
 
-    public FiltroAutorizacionOperaciones(ContextoDatos contexto, ILogger<FiltroAutorizacionOperaciones> registro)
+    public FiltroAutorizacionOperaciones(ContextoDatos contexto, ILogger<FiltroAutorizacionOperaciones> registro, IReloj reloj)
     {
         _contexto = contexto;
         _registro = registro;
+        _reloj = reloj;
     }
 
     public async Task OnAuthorizationAsync(AuthorizationFilterContext contexto)
@@ -68,12 +71,26 @@ public sealed class FiltroAutorizacionOperaciones : IAsyncAuthorizationFilter
             contexto.Result = new ChallengeResult();
         else if (rol != exigencia.RolRequerido)
         {
+            // RF-GP-05: sin el rol, todavía puede pasar con un permiso aprobado y vigente para ESTA operación.
+            // Se consulta en cada petición, así que al vencer deja de servir en la siguiente, sin intervención.
+            if (exigencia.Tipo == TipoExigencia.RolOPermiso && await TienePermisoVigenteAsync(usuarioId, operacion.Nombre))
+                return;
+
             // RF-CA-06: rechazo explícito. En el log solo el id del usuario y el nombre de la operación.
             _registro.LogWarning("Acceso denegado: usuario {UsuarioId} sin el rol requerido para la operación {Operacion}.",
                 usuarioId, operacion.Nombre);
-            contexto.Result = Prohibido(
-                $"No tienes permiso para ejecutar esta operación. Se requiere el rol {exigencia.RolRequerido!.Value.NombreVisible()}.");
+            var requisito = exigencia.Tipo == TipoExigencia.RolOPermiso
+                ? $"el rol {exigencia.RolRequerido!.Value.NombreVisible()} o un permiso aprobado y vigente"
+                : $"el rol {exigencia.RolRequerido!.Value.NombreVisible()}";
+            contexto.Result = Prohibido($"No tienes permiso para ejecutar esta operación. Se requiere {requisito}.");
         }
+    }
+
+    private Task<bool> TienePermisoVigenteAsync(int usuarioId, string operacion)
+    {
+        var ahora = _reloj.AhoraUtc;
+        return _contexto.PermisosOtorgados.AnyAsync(p =>
+            p.UsuarioId == usuarioId && p.Operacion == operacion && p.FechaVencimiento > ahora);
     }
 
     private static ObjectResult Prohibido(string mensaje) =>

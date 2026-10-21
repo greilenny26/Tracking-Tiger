@@ -19,7 +19,7 @@ Todos los casos de prueba manuales, con la petición y el resultado esperado, es
 ```
 git clone https://github.com/greilenny26/Tracking-Tiger.git
 cd Tracking-Tiger
-git checkout practica-1
+git checkout asignacion-2
 ```
 
 ## Variables de entorno
@@ -99,6 +99,13 @@ Quién puede ejecutar cada operación está declarado en un solo lugar: `src/Tra
 | `POST /api/usuarios/{id}/desactivar` | Administrador | — |
 | `POST /api/usuarios/{id}/reactivar` | Administrador | — |
 | `POST /api/usuarios/{id}/forzar-restablecimiento` | Administrador | — |
+| `POST /api/permisos/solicitudes` | Estándar | `{"permiso"}` (valores permitidos: `listar-usuarios`) |
+| `GET /api/permisos/solicitudes/pendientes` | Administrador | — |
+| `GET /api/permisos/solicitudes/mias` | Con sesión | — |
+| `POST /api/permisos/solicitudes/{id}/aprobar` | Administrador | `{"minutosVigencia"}` (1 a 43200) |
+| `POST /api/permisos/solicitudes/{id}/rechazar` | Administrador | `{"motivo"}` |
+
+`GET /api/usuarios` también lo puede ejecutar un usuario Estándar con un permiso `listar-usuarios` aprobado y vigente (RF-GP-05).
 
 ## Cómo verificar cada criterio
 
@@ -131,7 +138,7 @@ Pasos en el orden de la revisión. Las peticiones exactas y los resultados esper
 ### Roles y administración (RF-CA-04, 05, 06, 08, 20, 21)
 
 1. Todo usuario tiene exactamente un rol (`Usuarios.Rol`: `Administrador` o `Estandar`); el registro siempre asigna Estándar (RF-CA-04).
-2. Con sesión de Estándar, construir a mano `GET /api/usuarios` (también con `X-Rol: Administrador` o `?rol=Administrador`) → **403** "No tienes permiso para ejecutar esta operación. Se requiere el rol Administrador." (RF-CA-06, RD-06).
+2. Con sesión de Estándar, construir a mano `GET /api/usuarios` (también con `X-Rol: Administrador` o `?rol=Administrador`) → **403** "No tienes permiso para ejecutar esta operación. Se requiere el rol Administrador o un permiso aprobado y vigente." (RF-CA-06, RD-06).
 3. Con sesión de Estándar, intentar cambiar el propio rol: `PUT /api/usuarios/{mi-id}/rol` → **403** (RF-CA-08).
 4. Como Administrador:
    - `GET /api/usuarios` → lista con id, nombre, correo, rol y activo; nunca hashes ni tokens (RF-CA-21).
@@ -165,6 +172,49 @@ Detener la API (`Ctrl+C`) y volver a ejecutar `dotnet run --project src/Tracking
 - Estados en un solo lugar: `src/TrackingTiger/Negocio/Alertas/EstadoAlerta.cs`.
 - Transiciones en un solo lugar, con prohibidas explícitas y estados terminales: `src/TrackingTiger/Negocio/Alertas/MaquinaEstadosAlerta.cs`.
 - Tabla de transiciones: `docs/maquina-de-estados.md`.
+
+### Gestión de permisos (RF-GP-01 a 07, RD-04, RD-06, RD-07, RD-09)
+
+Un usuario Estándar pide permiso para ejecutar una operación concreta (por ahora `listar-usuarios`). Al aprobar, el Administrador elige cuántos minutos durará el permiso (`minutosVigencia`, de 1 a 43200 = 30 días); al vencer, el permiso deja de servir solo y el usuario puede pedirlo de nuevo.
+
+- Transiciones en un solo lugar (RD-04): `src/TrackingTiger/Core/Permisos/MaquinaEstadosSolicitud.cs`. Permitidas: Pendiente → Aprobada (Administrador), Aprobada → Aplicada (el sistema, automática), Pendiente → Rechazada (Administrador, con motivo). Cualquier otra se rechaza y el estado no cambia.
+- Estados: `src/TrackingTiger/Core/Permisos/EstadoSolicitud.cs`. La vigencia no es un estado de la solicitud: vive en el permiso otorgado (`PermisoOtorgado`, tabla `PermisosOtorgados`).
+- Quién ejecuta cada operación: `src/TrackingTiger/Core/ControlAcceso/CatalogoOperaciones.cs`, verificado en el servidor (RD-06).
+
+**Preparación** (no necesita SMTP: los dos usuarios se crean con `crear-admin`). En una terminal CMD nueva:
+
+1. `set DB_RUTA=%TEMP%\tt-permisos.db` (base de datos limpia para esta revisión).
+2. `set ADMIN_CORREO_INICIAL=admin@ejemplo.com` · `set ADMIN_CLAVE_INICIAL=Clave12345` · `dotnet run --project src/TrackingTiger -- crear-admin` → usuario **1**, el Administrador.
+3. `set ADMIN_CORREO_INICIAL=ana@ejemplo.com` · `dotnet run --project src/TrackingTiger -- crear-admin` → usuario **2** (Ana).
+4. `dotnet run --project src/TrackingTiger` (dejar la API corriendo; las peticiones van en otra terminal o en `docs/pruebas.http`).
+5. Login de los dos: `POST /api/auth/login` con `{"correo":"admin@ejemplo.com","contrasena":"Clave12345"}` y con `ana@ejemplo.com`. Con el token del Administrador: `PUT /api/usuarios/2/rol` `{"rol":"Estandar"}` → **200**. Ana ahora es Estándar.
+
+**Criterios**, en orden (token del Administrador = *Admin*, token de Ana = *Ana*):
+
+1. Ana: `GET /api/usuarios` → **403** "…Se requiere el rol Administrador o un permiso aprobado y vigente." (todavía no tiene el permiso).
+2. **RF-GP-01** — Ana: `POST /api/permisos/solicitudes` `{"permiso":"listar-usuarios"}` → **201** con `"estado":"Pendiente"` e `"id":1`. Repetirlo → **409** "Ya tienes una solicitud pendiente para ese permiso." Con `{"permiso":"cambiar-rol"}` → **400** "Ese permiso no se puede solicitar…" (RD-07).
+3. **RF-GP-02** — Admin: `GET /api/permisos/solicitudes/pendientes` → **200** con la solicitud 1. Ana: el mismo endpoint → **403**; Ana: `GET /api/permisos/solicitudes/mias` → **200** solo con las suyas.
+4. **RF-GP-03 y RF-GP-05** — Admin: `POST /api/permisos/solicitudes/1/aprobar` `{"minutosVigencia":2}` → **200** con `"estado":"Aplicada"`, `"aprobadorId":1`, `fechaResolucion` (cuándo) y `permisoVigenteHasta`. Sin `minutosVigencia` → **400**.
+5. **RF-GP-05** — Ana: `GET /api/usuarios` → **200** con la lista, sin ningún paso manual. Esperar 2 minutos y repetir → **403**: el permiso venció solo. Mientras está vigente, pedirlo otra vez → **409** "Ya tienes ese permiso vigente hasta…".
+6. **RF-GP-06** — Admin: aprobar otra vez la solicitud 1 → **400** "La solicitud ya está en Aplicada: no puede cambiar de estado."; `GET /api/permisos/solicitudes/mias` (Ana) muestra que sigue en `Aplicada`.
+7. **RF-GP-04** — Ana crea otra solicitud (id 2). Admin: `POST /api/permisos/solicitudes/2/rechazar` `{"motivo":"   "}` → **400** "Para pasar a Rechazada se exige un motivo escrito." y sigue Pendiente. Con `{"motivo":"No lo necesita."}` → **200** `"estado":"Rechazada"`, `rechazadaPorId`, `motivoRechazo` y `fechaResolucion`.
+8. **RF-GP-06** — Admin: `POST /api/permisos/solicitudes/2/aprobar` `{"minutosVigencia":5}` → **400** "La solicitud ya está en Rechazada: no puede cambiar de estado." (de Rechazada no se pasa a Aplicada).
+9. **RF-GP-07** — Ana crea otra solicitud (id 3). Admin: `PUT /api/usuarios/2/rol` `{"rol":"Administrador"}`. Ana (ahora Administradora): `POST /api/permisos/solicitudes/3/aprobar` `{"minutosVigencia":5}` → **400** "No puedes aprobar ni rechazar tu propia solicitud."; lo mismo con `/rechazar`. La solicitud 3 sigue en `Pendiente`.
+10. **RD-09** — Detener la API (`Ctrl+C`) y ejecutar otra vez `dotnet run --project src/TrackingTiger` (misma terminal, mismo `DB_RUTA`): `GET /api/permisos/solicitudes/pendientes` sigue mostrando la solicitud 3.
+
+## Pruebas
+
+Desde la raíz del repositorio, en un clon limpio (no necesita variables de entorno ni levantar la aplicación):
+
+```
+dotnet test
+```
+
+Ejecuta toda la suite de `tests/TrackingTiger.Pruebas` (xUnit). Las pruebas de Gestión de permisos están en `tests/TrackingTiger.Pruebas/Permisos/MaquinaEstadosSolicitudPruebas.cs` y ejercitan `MaquinaEstadosSolicitud` directamente, sin base de datos ni servidor (RD-12). Cada prueba crea sus propios datos, así que son independientes y pasan en cualquier orden; cada una marca sus fases `Preparar`, `Actuar` y `Verificar`.
+
+- Transición válida: `Aprobar_SolicitudPendiente_QuedaAprobadaConQuienAproboYCuando` (estado + quién + cuándo, RF-GP-03) y `Rechazar_SolicitudPendienteConMotivo_QuedaRechazadaConElMotivo` (RF-GP-04).
+- Transición prohibida: `Aprobar_SolicitudYaAplicada_SeRechazaYElEstadoNoCambia` y `Aplicar_SolicitudRechazada_SeRechazaYElEstadoNoCambia` (rechazo + estado sin cambios, RF-GP-06).
+- Además: rechazo sin motivo (RF-GP-04) y resolución de la propia solicitud (RF-GP-07).
 
 ## Estructura
 
