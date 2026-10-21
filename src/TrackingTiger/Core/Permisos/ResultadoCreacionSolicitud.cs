@@ -4,7 +4,8 @@ public enum EstadoCreacionSolicitud
 {
     Creada,
     PermisoInvalido,
-    YaPendiente
+    YaPendiente,
+    YaVigente
 }
 
 // Resultado de crear una solicitud de permiso (RF-GP-01).
@@ -18,4 +19,8 @@ public sealed record ResultadoCreacionSolicitud(EstadoCreacionSolicitud Estado, 
 
     public static ResultadoCreacionSolicitud YaPendiente() =>
         new(EstadoCreacionSolicitud.YaPendiente, "Ya tienes una solicitud pendiente para ese permiso.", null);
+
+    public static ResultadoCreacionSolicitud YaVigente(DateTime venceUtc) =>
+        new(EstadoCreacionSolicitud.YaVigente,
+            $"Ya tienes ese permiso vigente hasta {venceUtc:yyyy-MM-dd HH:mm} (UTC). Podrás pedirlo de nuevo cuando venza.", null);
 }

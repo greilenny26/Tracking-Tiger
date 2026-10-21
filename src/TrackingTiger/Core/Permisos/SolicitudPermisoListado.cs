@@ -11,4 +11,6 @@ public sealed record SolicitudPermisoListado(
     int? AprobadorId,
     int? RechazadaPorId,
     string? MotivoRechazo,
-    DateTime? FechaResolucion);
+    DateTime? FechaResolucion,
+    // RF-GP-05: hasta cuándo sirve el permiso otorgado; null si la solicitud no se aprobó.
+    DateTime? PermisoVigenteHasta);

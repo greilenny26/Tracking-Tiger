@@ -31,7 +31,7 @@ public sealed class ControladorPermisos : ControllerBase
         return resultado.Estado switch
         {
             EstadoCreacionSolicitud.Creada => StatusCode(StatusCodes.Status201Created, resultado.Solicitud),
-            EstadoCreacionSolicitud.YaPendiente => Conflict(new { mensaje = resultado.Mensaje }),
+            EstadoCreacionSolicitud.YaPendiente or EstadoCreacionSolicitud.YaVigente => Conflict(new { mensaje = resultado.Mensaje }),
             _ => BadRequest(new { mensaje = resultado.Mensaje })
         };
     }
@@ -50,6 +50,19 @@ public sealed class ControladorPermisos : ControllerBase
             return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
 
         return Ok(await _servicio.ListarDeUsuarioAsync(usuarioId));
+    }
+
+    // RF-GP-03 y RF-GP-05: 200 con la solicitud Aplicada (aprobadorId, fechaResolucion, permisoVigenteHasta);
+    // 400 si minutosVigencia no es válido, no está Pendiente o es propia (RF-GP-06, RF-GP-07), y entonces
+    // la solicitud no cambia; 404 si el id no existe.
+    [Operacion(CatalogoOperaciones.AprobarSolicitud)]
+    [HttpPost("{id:int}/aprobar")]
+    public async Task<IActionResult> Aprobar(int id, [FromBody] SolicitudAprobarPermiso cuerpo)
+    {
+        if (!TryObtenerUsuarioId(out var usuarioId))
+            return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
+
+        return Responder(await _servicio.AprobarAsync(id, usuarioId, cuerpo.MinutosVigencia));
     }
 
     // RF-GP-04: 200 con la solicitud Rechazada; 400 si falta el motivo, no está Pendiente o es propia
@@ -78,6 +91,9 @@ public sealed class ControladorPermisos : ControllerBase
 
 // Cuerpo JSON de POST /api/permisos/solicitudes. Admite null para dar un mensaje controlado (RD-07).
 public sealed record SolicitudCrearPermiso(string? Permiso);
+
+// Cuerpo JSON de POST /api/permisos/solicitudes/{id}/aprobar (RF-GP-03): minutos que durará el permiso.
+public sealed record SolicitudAprobarPermiso(int? MinutosVigencia);
 
 // Cuerpo JSON de POST /api/permisos/solicitudes/{id}/rechazar (RF-GP-04).
 public sealed record SolicitudRechazarPermiso(string? Motivo);

@@ -40,12 +40,52 @@ public sealed class ServicioSolicitudesPermiso
         if (yaPendiente)
             return ResultadoCreacionSolicitud.YaPendiente();
 
+        // Si ya tiene ese permiso vigente no hace falta pedirlo; podrá pedirlo de nuevo cuando venza.
+        var ahora = _reloj.AhoraUtc;
+        var vigente = await _contexto.PermisosOtorgados
+            .Where(p => p.UsuarioId == solicitanteId && p.Operacion == permiso && p.FechaVencimiento > ahora)
+            .OrderByDescending(p => p.FechaVencimiento)
+            .FirstOrDefaultAsync();
+        if (vigente is not null)
+            return ResultadoCreacionSolicitud.YaVigente(vigente.FechaVencimiento);
+
         var solicitud = SolicitudPermiso.Crear(solicitanteId, permiso, _reloj.AhoraUtc);
         _contexto.SolicitudesPermiso.Add(solicitud);
         await _contexto.SaveChangesAsync();
 
         var listado = (await ListarAsync(s => s.Id == solicitud.Id)).Single();
         return ResultadoCreacionSolicitud.Creada(listado);
+    }
+
+    // RF-GP-03 y RF-GP-05: el Administrador aprueba y elige cuántos minutos durará el permiso. Primero la máquina
+    // valida Pendiente → Aprobada (registra quién y cuándo, RF-GP-07); luego se otorga el permiso y el sistema
+    // pasa la solicitud a Aplicada. Todo se guarda en un solo SaveChanges: o queda todo o no queda nada.
+    public async Task<ResultadoResolucionSolicitud> AprobarAsync(int solicitudId, int administradorId, int? minutosVigencia)
+    {
+        if (minutosVigencia is null
+            || minutosVigencia < PermisoOtorgado.MinutosVigenciaMinimo
+            || minutosVigencia > PermisoOtorgado.MinutosVigenciaMaximo)
+            return ResultadoResolucionSolicitud.DatoInvalido(
+                $"minutosVigencia es obligatorio y debe estar entre {PermisoOtorgado.MinutosVigenciaMinimo} " +
+                $"y {PermisoOtorgado.MinutosVigenciaMaximo} (30 días).");
+
+        var solicitud = await _contexto.SolicitudesPermiso.SingleOrDefaultAsync(s => s.Id == solicitudId);
+        if (solicitud is null)
+            return ResultadoResolucionSolicitud.NoEncontrada();
+
+        var ahora = _reloj.AhoraUtc;
+        var aprobacion = MaquinaEstadosSolicitud.IntentarTransicion(solicitud, EstadoSolicitud.Aprobada, administradorId, ahora);
+        if (!aprobacion.Exito)
+            return ResultadoResolucionSolicitud.NoPermitida(aprobacion.Mensaje);
+
+        // RF-GP-05: el cambio de permiso se aplica solo, sin intervención manual.
+        _contexto.PermisosOtorgados.Add(PermisoOtorgado.Otorgar(solicitud, minutosVigencia.Value, ahora));
+        var aplicacion = MaquinaEstadosSolicitud.IntentarTransicion(solicitud, EstadoSolicitud.Aplicada, actorId: null, ahora);
+        if (!aplicacion.Exito)
+            return ResultadoResolucionSolicitud.NoPermitida(aplicacion.Mensaje);
+
+        await _contexto.SaveChangesAsync();
+        return ResultadoResolucionSolicitud.Resuelta((await ListarAsync(s => s.Id == solicitudId)).Single());
     }
 
     // RF-GP-04: el Administrador rechaza una solicitud pendiente con un motivo escrito. La máquina de estados
@@ -86,11 +126,19 @@ public sealed class ServicioSolicitudesPermiso
             .ThenBy(f => f.Solicitud.Id)
             .ToListAsync();
 
+        // Fecha de vencimiento del permiso que otorgó cada solicitud aprobada (RF-GP-05).
+        var ids = filas.Select(f => f.Solicitud.Id).ToList();
+        var vencimientos = await _contexto.PermisosOtorgados
+            .AsNoTracking()
+            .Where(p => ids.Contains(p.SolicitudId))
+            .ToDictionaryAsync(p => p.SolicitudId, p => p.FechaVencimiento);
+
         return filas
             .Select(f => new SolicitudPermisoListado(
                 f.Solicitud.Id, f.Solicitud.SolicitanteId, f.NombreSolicitante, f.Solicitud.PermisoSolicitado,
                 f.Solicitud.Estado.ToString(), f.Solicitud.FechaCreacion, f.Solicitud.AprobadorId,
-                f.Solicitud.RechazadaPorId, f.Solicitud.MotivoRechazo, f.Solicitud.FechaResolucion))
+                f.Solicitud.RechazadaPorId, f.Solicitud.MotivoRechazo, f.Solicitud.FechaResolucion,
+                vencimientos.TryGetValue(f.Solicitud.Id, out var vence) ? vence : null))
             .ToList();
     }
 }
