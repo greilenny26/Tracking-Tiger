@@ -73,6 +73,9 @@ public sealed class ServicioSolicitudesPermiso
         if (solicitud is null)
             return ResultadoResolucionSolicitud.NoEncontrada();
 
+        if (!await EsAdministradorAsync(administradorId))
+            return ResultadoResolucionSolicitud.NoPermitida("Solo un Administrador puede aprobar solicitudes.");
+
         var ahora = _reloj.AhoraUtc;
         var aprobacion = MaquinaEstadosSolicitud.IntentarTransicion(solicitud, EstadoSolicitud.Aprobada, administradorId, ahora);
         if (!aprobacion.Exito)
@@ -99,7 +102,10 @@ public sealed class ServicioSolicitudesPermiso
         if (solicitud is null)
             return ResultadoResolucionSolicitud.NoEncontrada();
 
-        var transicion = MaquinaEstadosSolicitud.IntentarTransicion(
+        if (!await EsAdministradorAsync(administradorId))
+            return ResultadoResolucionSolicitud.NoPermitida("Solo un Administrador puede rechazar solicitudes.");
+
+        var transicion =MaquinaEstadosSolicitud.IntentarTransicion(
             solicitud, EstadoSolicitud.Rechazada, administradorId, _reloj.AhoraUtc, motivo);
         if (!transicion.Exito)
             return ResultadoResolucionSolicitud.NoPermitida(transicion.Mensaje);
@@ -115,6 +121,11 @@ public sealed class ServicioSolicitudesPermiso
     // RF-GP-02: un usuario solo ve SUS solicitudes; el id sale de su sesión, así no puede ver las de otros.
     public Task<IReadOnlyList<SolicitudPermisoListado>> ListarDeUsuarioAsync(int usuarioId) =>
         ListarAsync(s => s.SolicitanteId == usuarioId);
+
+    // RF-GP-03 y RF-GP-04: solo un Administrador resuelve solicitudes. CatalogoOperaciones ya lo exige en el
+    // endpoint; el servicio lo vuelve a comprobar para que la regla viva también en Gestión de permisos.
+    private Task<bool> EsAdministradorAsync(int usuarioId) =>
+        _contexto.Usuarios.AnyAsync(u => u.Id == usuarioId && u.Rol == Rol.Administrador);
 
     private async Task<IReadOnlyList<SolicitudPermisoListado>> ListarAsync(Expression<Func<SolicitudPermiso, bool>> filtro)
     {
