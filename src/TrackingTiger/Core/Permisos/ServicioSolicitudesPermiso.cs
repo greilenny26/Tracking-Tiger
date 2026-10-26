@@ -73,8 +73,6 @@ public sealed class ServicioSolicitudesPermiso
         if (solicitud is null)
             return ResultadoResolucionSolicitud.NoEncontrada();
 
-        if (!await EsAdministradorAsync(administradorId))
-            return ResultadoResolucionSolicitud.NoPermitida("Solo un Administrador puede aprobar solicitudes.");
 
         var ahora = _reloj.AhoraUtc;
         var aprobacion = MaquinaEstadosSolicitud.IntentarTransicion(solicitud, EstadoSolicitud.Aprobada, administradorId, ahora);
