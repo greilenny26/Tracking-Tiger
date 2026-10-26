@@ -60,7 +60,7 @@ public static class MaquinaEstadosSolicitud
                 return ResultadoTransicionSolicitud.Rechazada("No puedes aprobar ni rechazar tu propia solicitud.");
         }
 
-        if (transicion.ExigeMotivo && string.IsNullOrWhiteSpace(motivo))
+        if (transicion.ExigeMotivo && motivo is null)
             return ResultadoTransicionSolicitud.Rechazada($"Para pasar a {hacia} se exige un motivo escrito.");
 
         switch (hacia)
