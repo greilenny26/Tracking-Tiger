@@ -56,7 +56,7 @@ public static class MaquinaEstadosSolicitud
                 return ResultadoTransicionSolicitud.Rechazada($"El paso a {hacia} exige un Administrador.");
 
             // RF-GP-07: nadie resuelve su propia solicitud.
-            if (actorId == solicitud.SolicitanteId)
+            if (actorId != solicitud.SolicitanteId)
                 return ResultadoTransicionSolicitud.Rechazada("No puedes aprobar ni rechazar tu propia solicitud.");
         }
 
