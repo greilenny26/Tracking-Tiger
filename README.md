@@ -19,7 +19,7 @@ Todos los casos de prueba manuales, con la petición y el resultado esperado, es
 ```
 git clone https://github.com/greilenny26/Tracking-Tiger.git
 cd Tracking-Tiger
-git checkout asignacion-2
+git checkout practica-2
 ```
 
 ## Variables de entorno
