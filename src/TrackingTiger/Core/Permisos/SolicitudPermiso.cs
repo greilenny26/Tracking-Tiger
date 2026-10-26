@@ -44,8 +44,6 @@ public class SolicitudPermiso
     internal void RegistrarAprobacion(int aprobadorId, DateTime ahoraUtc)
     {
         Estado = EstadoSolicitud.Aprobada;
-        AprobadorId = aprobadorId;
-        FechaResolucion = ahoraUtc;
     }
 
     internal void RegistrarRechazo(int rechazadaPorId, string motivo, DateTime ahoraUtc)
