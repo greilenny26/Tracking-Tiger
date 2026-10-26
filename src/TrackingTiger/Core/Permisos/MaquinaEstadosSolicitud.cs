@@ -24,6 +24,8 @@ public static class MaquinaEstadosSolicitud
             "Automática, inmediatamente después de aprobar.", ExigeMotivo: false),
         new(EstadoSolicitud.Pendiente, EstadoSolicitud.Rechazada, Ejecutor.Administrador,
             "Exige un motivo escrito.", ExigeMotivo: true),
+        new(EstadoSolicitud.Aprobada, EstadoSolicitud.Rechazada, Ejecutor.Administrador,
+            "Exige un motivo escrito.", ExigeMotivo: true),
     ];
 
     // Un estado es terminal si ninguna transición permitida parte de él (Aplicada, Rechazada).
