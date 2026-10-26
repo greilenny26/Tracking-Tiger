@@ -108,6 +108,66 @@ public class MaquinaEstadosSolicitudPruebas
         Assert.Equal(EstadoSolicitud.Pendiente, solicitud.Estado);
     }
 
+    // RF-GP-06: una solicitud Aprobada no puede rechazarse.
+    [Fact]
+    public void Rechazar_SolicitudAprobada_SeRechazaYElEstadoNoCambia()
+    {
+        // Preparar
+        var solicitud = NuevaSolicitudPendiente();
+        MaquinaEstadosSolicitud.IntentarTransicion(solicitud, EstadoSolicitud.Aprobada, AdministradorId, Ahora);
+
+        // Actuar
+        var resultado = MaquinaEstadosSolicitud.IntentarTransicion(
+            solicitud, EstadoSolicitud.Rechazada, 3, Ahora.AddHours(1), "Lo pensé mejor.");
+
+        // Verificar
+        Assert.False(resultado.Exito);
+        Assert.Equal(EstadoSolicitud.Aprobada, solicitud.Estado);
+        Assert.Null(solicitud.MotivoRechazo);
+        Assert.Null(solicitud.RechazadaPorId);
+    }
+
+    // RF-GP-06: una solicitud ya Aplicada no puede rechazarse.
+    [Fact]
+    public void Rechazar_SolicitudAplicada_SeRechazaYElEstadoNoCambia()
+    {
+        // Preparar
+        var solicitud = NuevaSolicitudPendiente();
+        MaquinaEstadosSolicitud.IntentarTransicion(solicitud, EstadoSolicitud.Aprobada, AdministradorId, Ahora);
+        MaquinaEstadosSolicitud.IntentarTransicion(solicitud, EstadoSolicitud.Aplicada, null, Ahora);
+
+        // Actuar
+        var resultado = MaquinaEstadosSolicitud.IntentarTransicion(
+            solicitud, EstadoSolicitud.Rechazada, 3, Ahora.AddHours(1), "Lo pensé mejor.");
+
+        // Verificar
+        Assert.False(resultado.Exito);
+        Assert.Equal(EstadoSolicitud.Aplicada, solicitud.Estado);
+        Assert.Null(solicitud.MotivoRechazo);
+        Assert.Null(solicitud.RechazadaPorId);
+    }
+
+    // RF-GP-06: la tabla tiene exactamente estas tres transiciones; cualquier otra está prohibida.
+    [Fact]
+    public void Permitidas_SoloContieneLasTransicionesDeLaTabla()
+    {
+        // Preparar
+        (EstadoSolicitud, EstadoSolicitud)[] esperadas =
+        [
+            (EstadoSolicitud.Pendiente, EstadoSolicitud.Aprobada),
+            (EstadoSolicitud.Aprobada, EstadoSolicitud.Aplicada),
+            (EstadoSolicitud.Pendiente, EstadoSolicitud.Rechazada),
+        ];
+
+        // Actuar
+        var declaradas = MaquinaEstadosSolicitud.Permitidas.Select(t => (t.Desde, t.Hacia)).ToList();
+
+        // Verificar
+        Assert.Equal(esperadas.Order(), declaradas.Order());
+        Assert.True(MaquinaEstadosSolicitud.EsTerminal(EstadoSolicitud.Aplicada));
+        Assert.True(MaquinaEstadosSolicitud.EsTerminal(EstadoSolicitud.Rechazada));
+    }
+
     // RF-GP-04: sin motivo escrito, el rechazo no se completa.
     [Theory]
     [InlineData(null)]
