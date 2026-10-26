@@ -210,11 +210,33 @@ Desde la raíz del repositorio, en un clon limpio (no necesita variables de ento
 dotnet test
 ```
 
-Ejecuta toda la suite de `tests/TrackingTiger.Pruebas` (xUnit). Las pruebas de Gestión de permisos están en `tests/TrackingTiger.Pruebas/Permisos/MaquinaEstadosSolicitudPruebas.cs` y ejercitan `MaquinaEstadosSolicitud` directamente, sin base de datos ni servidor (RD-12). Cada prueba crea sus propios datos, así que son independientes y pasan en cualquier orden; cada una marca sus fases `Preparar`, `Actuar` y `Verificar`.
+Ejecuta toda la suite de `tests/TrackingTiger.Pruebas` (xUnit). Las pruebas de Gestión de permisos están en `tests/TrackingTiger.Pruebas/Permisos/` y no levantan la aplicación (RD-12):
 
-- Transición válida: `Aprobar_SolicitudPendiente_QuedaAprobadaConQuienAproboYCuando` (estado + quién + cuándo, RF-GP-03) y `Rechazar_SolicitudPendienteConMotivo_QuedaRechazadaConElMotivo` (RF-GP-04).
-- Transición prohibida: `Aprobar_SolicitudYaAplicada_SeRechazaYElEstadoNoCambia` y `Aplicar_SolicitudRechazada_SeRechazaYElEstadoNoCambia` (rechazo + estado sin cambios, RF-GP-06).
-- Además: rechazo sin motivo (RF-GP-04) y resolución de la propia solicitud (RF-GP-07).
+- `MaquinaEstadosSolicitudPruebas.cs` ejercita `MaquinaEstadosSolicitud` directamente, sin base de datos.
+- `ServicioSolicitudesPermisoPruebas.cs` ejercita `ServicioSolicitudesPermiso` con una base SQLite en memoria y un reloj fijo; cada prueba tiene su propia base vacía.
+
+Cada prueba crea sus propios datos, así que son independientes y pasan en cualquier orden; cada una marca sus fases `Preparar`, `Actuar` y `Verificar` y lleva un comentario con el requisito que verifica.
+
+| Requisito | Pruebas |
+|---|---|
+| RF-GP-01 — la solicitud nace en Pendiente | `CrearAsync_EstandarPideUnPermiso_LaSolicitudNaceEnPendiente` |
+| RF-GP-02 — un Estándar no ve las solicitudes de otros | `ListarDeUsuarioAsync_Estandar_NoVeLasSolicitudesDeOtrosUsuarios`, `ListarPendientesAsync_Administrador_VeLasPendientesDeTodosLosUsuarios` |
+| RF-GP-03 — queda registrado quién aprobó y cuándo | `Aprobar_SolicitudPendiente_QuedaAprobadaConQuienAproboYCuando`, `AprobarAsync_Administrador_RegistraQuienAproboYCuando`, `AprobarAsync_UsuarioEstandar_SeRechazaYLaSolicitudSiguePendiente` |
+| RF-GP-04 — sin motivo, el rechazo no se completa | `Rechazar_SinMotivoEscrito_SeRechazaYSigueEnPendiente`, `RechazarAsync_SinMotivo_SeRechazaYLaSolicitudSiguePendiente`, `Rechazar_SolicitudPendienteConMotivo_QuedaRechazadaConElMotivo`, `RechazarAsync_AdministradorConMotivo_QuedaRechazadaConElMotivo`, `RechazarAsync_UsuarioEstandar_SeRechazaYLaSolicitudSiguePendiente` |
+| RF-GP-05 — tras aprobar llega a Aplicada y el permiso queda efectivo | `AprobarAsync_Pendiente_LlegaAAplicadaYElPermisoQuedaVigente`, `PermisoOtorgado_AlLlegarSuVencimiento_DejaDeEstarVigente` |
+| RF-GP-06 — solo las transiciones de la tabla | `Permitidas_SoloContieneLasTransicionesDeLaTabla`, `Aprobar_SolicitudYaAplicada_SeRechazaYElEstadoNoCambia`, `AprobarAsync_DosVeces_LaSegundaSeRechazaYNadaCambia`, `Aplicar_SolicitudRechazada_SeRechazaYElEstadoNoCambia`, `Aplicar_SolicitudPendiente_SeRechazaYSigueEnPendiente`, `Rechazar_SolicitudAprobada_SeRechazaYElEstadoNoCambia`, `Rechazar_SolicitudAplicada_SeRechazaYElEstadoNoCambia`, `RechazarAsync_SolicitudAplicada_SeRechazaYSigueAplicada` |
+| RF-GP-07 — nadie resuelve su propia solicitud | `Aprobar_PropiaSolicitud_SeRechazaYSigueEnPendiente`, `Rechazar_PropiaSolicitud_SeRechazaYSigueEnPendiente`, `AprobarAsync_AdministradorSobreSuPropiaSolicitud_SeRechazaYSiguePendiente`, `RechazarAsync_AdministradorSobreSuPropiaSolicitud_SeRechazaYSiguePendiente` |
+
+## Defectos
+
+Defectos de la variante B (Práctica 2). Cada etiqueta `practica-2-defecto-N` planta uno sobre `practica-2`; con él, `dotnet test` falla al menos en la prueba indicada.
+
+1. **RF-GP-04** — `RechazarAsync_SinMotivo_SeRechazaYLaSolicitudSiguePendiente` (también `Rechazar_SinMotivoEscrito_SeRechazaYSigueEnPendiente`): un rechazo con motivo vacío o de solo espacios no se completa y la solicitud sigue Pendiente.
+2. **RF-GP-06** — `Rechazar_SolicitudAprobada_SeRechazaYElEstadoNoCambia` (también `Permitidas_SoloContieneLasTransicionesDeLaTabla`): una solicitud Aprobada no puede pasar a Rechazada.
+3. **RF-GP-03** — `AprobarAsync_UsuarioEstandar_SeRechazaYLaSolicitudSiguePendiente`: un usuario Estándar que intenta aprobar recibe un rechazo y no se otorga ningún permiso.
+4. **RF-GP-07** — `AprobarAsync_AdministradorSobreSuPropiaSolicitud_SeRechazaYSiguePendiente` (también `AprobarAsync_Administrador_RegistraQuienAproboYCuando`): un Administrador no puede resolver su propia solicitud y sí puede resolver las de otros.
+5. **RF-GP-06** — `RechazarAsync_SolicitudAplicada_SeRechazaYSigueAplicada` (también `Rechazar_SolicitudAplicada_SeRechazaYElEstadoNoCambia`): una solicitud ya Aplicada no puede rechazarse.
+6. **RF-GP-03** — `AprobarAsync_Administrador_RegistraQuienAproboYCuando` (también `Aprobar_SolicitudPendiente_QuedaAprobadaConQuienAproboYCuando`): al aprobar queda registrado el id del Administrador que aprobó y la fecha de la aprobación.
 
 ## Estructura
 
