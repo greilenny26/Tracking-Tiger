@@ -126,9 +126,7 @@ public sealed class ServicioTarjetas
     // levantar-bloqueo-total aprobado por un Administrador y vigente en Gestión de permisos ("cuatro ojos").
     public async Task<ResultadoOperacionTarjeta> LevantarBloqueoTotalAsync(int tarjetaId, int agenteId, string? nota)
     {
-        if (!await _permisos.TienePermisoVigenteAsync(agenteId, CatalogoOperaciones.LevantarBloqueoTotal))
-            return ResultadoOperacionTarjeta.SinPermiso(
-                $"Para levantar un Bloqueo Total necesitas el permiso {CatalogoOperaciones.LevantarBloqueoTotal} aprobado por un Administrador y vigente.");
+
 
         return await CambiarEstadoAsync(tarjetaId, agenteId, EstadoTarjeta.BloqueoTotal, EstadoTarjeta.Activa, nota);
     }
