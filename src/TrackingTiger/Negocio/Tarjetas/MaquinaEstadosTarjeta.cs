@@ -67,8 +67,6 @@ public static class MaquinaEstadosTarjeta
         if (transicion is null)
             return ResultadoTransicionTarjeta.Rechazada(MotivoNoPermitida(tarjeta.Estado, hacia));
 
-        if (transicion.QuienLaEjecuta == EjecutorTarjeta.Sistema && agenteId is not null)
-            return ResultadoTransicionTarjeta.Rechazada($"El paso a {hacia} lo hace solo el sistema, no un usuario.");
 
         if (transicion.QuienLaEjecuta == EjecutorTarjeta.Agente && agenteId is null)
             return ResultadoTransicionTarjeta.Rechazada($"El paso a {hacia} exige un agente.");
