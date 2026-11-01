@@ -1,45 +1,66 @@
-# Máquina de estados: AlertaFraude
+# Máquina de estados: Tarjeta
 
-Módulo de negocio de Tracking Tiger: detección de fraude en tarjetas de débito y crédito.
-La entidad central es **AlertaFraude**: una alerta sobre una transacción sospechosa que un analista revisa y resuelve.
+Módulo de negocio de Tracking Tiger: sistema antifraude para tarjetas de crédito.
+La entidad central es la **Tarjeta**: cuando su actividad parece sospechosa se bloquea, y un agente de fraude
+(usuario Estándar) resuelve el caso con la respuesta del cliente.
 
 ## Dónde está en el código
 
 | Qué | Dónde |
 |---|---|
-| Entidad central con su atributo de estado | `Negocio/Alertas/AlertaFraude.cs` (tabla `AlertasFraude`) |
-| Estados, declarados en un solo lugar (RF-NEG-03) | `Negocio/Alertas/EstadoAlerta.cs` |
-| Transiciones, resueltas en un solo punto (RD-04) | `Negocio/Alertas/MaquinaEstadosAlerta.cs` |
+| Entidad central con su atributo de estado | `src/TrackingTiger/Negocio/Tarjetas/Tarjeta.cs` (tabla `Tarjetas`) |
+| Estados, declarados en un solo lugar (RF-NEG-03) | `src/TrackingTiger/Negocio/Tarjetas/EstadoTarjeta.cs` |
+| Transiciones, resueltas en un solo punto (RD-04) | `src/TrackingTiger/Negocio/Tarjetas/MaquinaEstadosTarjeta.cs` |
+| Historial de cada transición | `src/TrackingTiger/Negocio/Tarjetas/HistorialEstadoTarjeta.cs` (tabla `HistorialEstadosTarjeta`) |
 
-Ninguna otra clase cambia el estado: `AlertaFraude.AplicarEstado` es `internal` y solo lo invoca `MaquinaEstadosAlerta.IntentarTransicion`.
-Agregar una transición nueva se hace agregando una línea en `MaquinaEstadosAlerta.Permitidas`.
+Ninguna otra clase cambia el estado: `Tarjeta.AplicarEstado` es `internal` y solo lo invoca
+`MaquinaEstadosTarjeta.IntentarTransicion`. Agregar una transición se hace agregando una línea en
+`MaquinaEstadosTarjeta.Permitidas`.
 
 ## Estados
 
 | Estado | Significado | ¿Terminal? |
 |---|---|---|
-| Detectada | La detección marcó la transacción como sospechosa. Toda alerta nace aquí. | No |
-| EnRevision | Un analista la está revisando. | No |
-| Confirmada | Se confirmó que la transacción es fraude. | **Sí** (RF-NEG-05) |
-| Descartada | Se descartó: la transacción era legítima. | **Sí** (RF-NEG-05) |
+| Activa | Opera con normalidad. Toda tarjeta nace aquí. | No |
+| BloqueoSuave | Bloqueo temporal por actividad sospechosa; se levanta si el cliente reconoce la actividad. | No |
+| BloqueoTotal | El cliente no reconoció la actividad; solo un agente con permiso aprobado lo levanta. | No |
+| Cancelada | Pérdida o robo. La tarjeta no se reactiva. | **Sí** (RF-NEG-05) |
 
-## Transiciones
+## Transiciones permitidas
 
-| Desde | Hacia | Quién la ejecuta | Condición |
+| # | Desde | Hacia | Quién la ejecuta | Condición |
+|---|---|---|---|---|
+| 1 | Activa | BloqueoSuave | Sistema | Solo el sistema, al detectar una ráfaga (3 declinaciones en 60 minutos). Ningún usuario la ejecuta a mano. |
+| 2 | BloqueoSuave | Activa | Agente (Estándar) | El cliente reconoció la actividad. |
+| 3 | BloqueoSuave | BloqueoTotal | Agente (Estándar) | El cliente no reconoce la actividad; se exige una nota. |
+| 4 | BloqueoTotal | Activa | Agente (Estándar) con permiso aprobado | Permiso `levantar-bloqueo-total` aprobado y vigente en Gestión de permisos; se exige una nota. |
+| 5 | Activa | Cancelada | Agente (Estándar) | Pérdida o robo; se exige una nota. |
+| 6 | BloqueoSuave | Cancelada | Agente (Estándar) | Pérdida o robo; se exige una nota. |
+| 7 | BloqueoTotal | Cancelada | Agente (Estándar) | Pérdida o robo; se exige una nota. |
+
+## Transiciones prohibidas
+
+| # | Desde | Hacia | Motivo |
 |---|---|---|---|
-| Detectada | EnRevision | Estándar o Administrador | La alerta está en Detectada. |
-| EnRevision | Confirmada | Administrador | La alerta está en EnRevision y se indica una observación. |
-| EnRevision | Descartada | Administrador | La alerta está en EnRevision y se indica una observación. |
-| Detectada | Confirmada | — | **Prohibida explícitamente** (RF-NEG-04): una alerta debe revisarse antes de confirmarse. |
-| Descartada | Confirmada | — | **Prohibida explícitamente** (RF-NEG-04): una alerta descartada no puede confirmarse después. |
-| Cualquier otra combinación | — | — | Prohibida. El sistema la rechaza y el estado no cambia. |
+| 1 | Activa | BloqueoTotal | Toda tarjeta pasa primero por Bloqueo Suave. |
+| 2 | BloqueoTotal | BloqueoSuave | Un Bloqueo Total no se rebaja a Bloqueo Suave. |
+| 3 | Cancelada | Activa | Una tarjeta cancelada por pérdida o robo nunca vuelve a Activa. |
 
-Desde los estados terminales (Confirmada y Descartada) no parte ninguna transición.
+Prohibidas explícitamente (RF-NEG-04). Cualquier otra combinación que no esté en la tabla de permitidas
+también se rechaza. Desde Cancelada no parte ninguna transición.
 
 ## Comportamiento ante una transición no permitida
 
-`MaquinaEstadosAlerta.IntentarTransicion` devuelve un `ResultadoTransicion` con `Exito = false` y un mensaje en español, y **no modifica** la alerta. Al llegar a un estado terminal se registra la fecha de resolución en UTC.
+`MaquinaEstadosTarjeta.IntentarTransicion` devuelve un `ResultadoTransicionTarjeta` con `Exito = false` y un
+mensaje en español, y **no modifica** la tarjeta ni registra historial (RD-07).
 
-## Pendiente (semana 8)
+## Independencia de Gestión de permisos (RF-NEG-09)
 
-Pruebas automatizadas de la máquina de estados (suite propia, separada de la de Gestión de permisos) y endpoints del módulo, protegidos por Control de acceso (RF-NEG-06).
+La tarjeta tiene su propia máquina de estados. La transición 4 solo pregunta a Gestión de permisos si el agente
+tiene un permiso vigente (`ServicioSolicitudesPermiso.TienePermisoVigenteAsync`); no usa los estados de la
+solicitud, así que cambiarlos no obliga a cambiar los de la tarjeta.
+
+## Pendiente (semanas siguientes)
+
+Correo al cliente con enlace para reconocer o no la actividad, plazo de respuesta, scoring y periodo de
+aprendizaje (RF-NEG-07 y siguientes).

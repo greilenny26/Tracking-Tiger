@@ -3,7 +3,7 @@
 Sistema antifraude para tarjetas de débito y crédito. API web en ASP.NET Core (.NET 10) con EF Core + SQLite.
 
 - **Core** (`src/TrackingTiger/Core/`): Control de acceso (registro, activación por correo, sesión, roles, administración de usuarios, recuperación de contraseña) y la cola mínima de correos.
-- **Negocio** (`src/TrackingTiger/Negocio/`): alertas de fraude con su máquina de estados (ver `docs/maquina-de-estados.md`). El Core no depende del Negocio (RD-03).
+- **Negocio** (`src/TrackingTiger/Negocio/Tarjetas/`): tarjetas de crédito vigiladas por el sistema antifraude, con su máquina de estados Activa / BloqueoSuave / BloqueoTotal / Cancelada (ver `docs/maquina-de-estados.md`). El Core no depende del Negocio (RD-03).
 
 Todos los casos de prueba manuales, con la petición y el resultado esperado, están en **`docs/pruebas.http`** (se ejecuta con la extensión REST Client de VS Code o copiando las peticiones a cualquier cliente HTTP).
 
@@ -19,7 +19,7 @@ Todos los casos de prueba manuales, con la petición y el resultado esperado, es
 ```
 git clone https://github.com/greilenny26/Tracking-Tiger.git
 cd Tracking-Tiger
-git checkout practica-2
+git checkout practica-3
 ```
 
 ## Variables de entorno
@@ -99,11 +99,19 @@ Quién puede ejecutar cada operación está declarado en un solo lugar: `src/Tra
 | `POST /api/usuarios/{id}/desactivar` | Administrador | — |
 | `POST /api/usuarios/{id}/reactivar` | Administrador | — |
 | `POST /api/usuarios/{id}/forzar-restablecimiento` | Administrador | — |
-| `POST /api/permisos/solicitudes` | Estándar | `{"permiso"}` (valores permitidos: `listar-usuarios`) |
+| `POST /api/permisos/solicitudes` | Estándar | `{"permiso"}` (valores permitidos: `listar-usuarios`, `levantar-bloqueo-total`) |
 | `GET /api/permisos/solicitudes/pendientes` | Administrador | — |
 | `GET /api/permisos/solicitudes/mias` | Con sesión | — |
 | `POST /api/permisos/solicitudes/{id}/aprobar` | Administrador | `{"minutosVigencia"}` (1 a 43200) |
 | `POST /api/permisos/solicitudes/{id}/rechazar` | Administrador | `{"motivo"}` |
+| `POST /api/tarjetas` | Con sesión | `{"titular","ultimosCuatro","limiteCredito"}` |
+| `POST /api/tarjetas/{id}/transacciones` | Con sesión | `{"monto","comercio"}` |
+| `GET /api/tarjetas/{id}` | Con sesión | — |
+| `POST /api/tarjetas/{id}/reconocer` | Estándar | — |
+| `POST /api/tarjetas/{id}/no-reconocer` | Estándar | `{"nota"}` |
+| `POST /api/tarjetas/{id}/levantar-bloqueo-total` | Estándar + permiso `levantar-bloqueo-total` | `{"nota"}` |
+| `POST /api/tarjetas/{id}/cancelar` | Estándar | `{"nota"}` |
+| `GET /api/tarjetas/{id}/historial` | Administrador | — |
 
 `GET /api/usuarios` también lo puede ejecutar un usuario Estándar con un permiso `listar-usuarios` aprobado y vigente (RF-GP-05).
 
@@ -165,13 +173,36 @@ Pasos en el orden de la revisión. Las peticiones exactas y los resultados esper
 
 ### Persistencia (RD-09)
 
-Detener la API (`Ctrl+C`) y volver a ejecutar `dotnet run --project src/TrackingTiger`: los usuarios siguen ahí.
+Detener la API (`Ctrl+C`) y volver a ejecutar `dotnet run --project src/TrackingTiger`: los usuarios, las solicitudes de permiso y las tarjetas siguen ahí.
 
-### Máquina de estados del negocio (RF-NEG-03, 04, 05, RD-04)
+### Módulo de negocio: Tarjetas (RF-NEG-02 a 06, RF-NEG-09, RD-04, RD-07, RD-09)
 
-- Estados en un solo lugar: `src/TrackingTiger/Negocio/Alertas/EstadoAlerta.cs`.
-- Transiciones en un solo lugar, con prohibidas explícitas y estados terminales: `src/TrackingTiger/Negocio/Alertas/MaquinaEstadosAlerta.cs`.
-- Tabla de transiciones: `docs/maquina-de-estados.md`.
+Una tarjeta nace **Activa**. Si acumula 3 transacciones declinadas en 60 minutos, el sistema la pasa a **BloqueoSuave**. Un agente de fraude (usuario Estándar) registra la respuesta del cliente: si la reconoce vuelve a Activa; si no, pasa a **BloqueoTotal**, que solo se levanta con un permiso aprobado por un Administrador. **Cancelada** (pérdida o robo) es terminal.
+
+- Estados en un solo lugar (RF-NEG-03): `src/TrackingTiger/Negocio/Tarjetas/EstadoTarjeta.cs`.
+- Transiciones en un solo punto (RD-04), con las prohibidas explícitas (RF-NEG-04) y el estado terminal (RF-NEG-05): `src/TrackingTiger/Negocio/Tarjetas/MaquinaEstadosTarjeta.cs`. Tablas: `docs/maquina-de-estados.md`.
+- Quién ejecuta cada operación (RF-NEG-06): `src/TrackingTiger/Core/ControlAcceso/CatalogoOperaciones.cs`. Sin sesión, todas responden **401**.
+- RF-NEG-09: la tarjeta solo le pregunta a Gestión de permisos si el agente tiene un permiso vigente (`ServicioSolicitudesPermiso.TienePermisoVigenteAsync`); no usa los estados de la solicitud.
+
+**Preparación** (no necesita SMTP). En una terminal CMD nueva:
+
+1. `set DB_RUTA=%TEMP%\tt-tarjetas.db` (base de datos limpia para esta revisión).
+2. `set ADMIN_CORREO_INICIAL=admin@ejemplo.com` · `set ADMIN_CLAVE_INICIAL=Clave12345` · `dotnet run --project src/TrackingTiger -- crear-admin` → usuario **1**, el Administrador.
+3. `set ADMIN_CORREO_INICIAL=agente@ejemplo.com` · `dotnet run --project src/TrackingTiger -- crear-admin` → usuario **2**, el agente.
+4. `dotnet run --project src/TrackingTiger` (dejar la API corriendo; las peticiones van en otra terminal o en `docs/pruebas.http`, sección «Tarjetas»).
+5. Login de los dos: `POST /api/auth/login` con `{"correo":"admin@ejemplo.com","contrasena":"Clave12345"}` y con `agente@ejemplo.com`. Con el token del Administrador: `PUT /api/usuarios/2/rol` `{"rol":"Estandar"}` → **200**. El agente ahora es Estándar.
+
+**Funcionalidades**, en orden (token del Administrador = *Admin*, token del agente = *Agente*):
+
+1. **Emitir una tarjeta** — Agente: `POST /api/tarjetas` `{"titular":"Ana Pérez","ultimosCuatro":"4321","limiteCredito":100}` → **201** con `"id":1`, `"estado":"Activa"` y `"numeroEnmascarado":"**** 4321"`. Con `"ultimosCuatro":"12a4"` → **400** "ultimosCuatro debe tener exactamente 4 dígitos." (RD-07). Sin token → **401**.
+2. **Registrar transacciones** — Agente: `POST /api/tarjetas/1/transacciones` `{"monto":40,"comercio":"Farmacia"}` → **200** "Transacción aprobada." y `"disponible":60`. Con `{"monto":500,"comercio":"Tienda en línea"}` tres veces → las dos primeras **200** "Transacción declinada: crédito disponible insuficiente."; la tercera agrega "La tarjeta pasó a BloqueoSuave por una ráfaga de declinaciones." Con la tarjeta bloqueada, una transacción se declina y el estado no cambia.
+3. **Consultar la tarjeta** — Agente: `GET /api/tarjetas/1` → **200** con `"estado":"BloqueoSuave"`. `GET /api/tarjetas/999` → **404**.
+4. **El cliente reconoce la actividad** — Admin: `POST /api/tarjetas/1/reconocer` → **403** "…Se requiere el rol Estándar." Agente: lo mismo → **200** `"estado":"Activa"`. (Para seguir, repetir las tres transacciones de 500 del paso 2: vuelve a BloqueoSuave.)
+5. **El cliente no reconoce la actividad** — Agente: `POST /api/tarjetas/1/no-reconocer` `{"nota":""}` → **400** "Para pasar a BloqueoTotal se exige una nota." y no cambia. Con `{"nota":"El cliente no reconoce las compras."}` → **200** `"estado":"BloqueoTotal"`. Ahora `POST /api/tarjetas/1/reconocer` → **400** "Esta operación solo aplica a una tarjeta en BloqueoSuave…".
+6. **Levantar el Bloqueo Total (con Gestión de permisos)** — Agente: `POST /api/tarjetas/1/levantar-bloqueo-total` `{"nota":"Validado por llamada."}` → **403** "Para levantar un Bloqueo Total necesitas el permiso levantar-bloqueo-total aprobado por un Administrador y vigente." Agente: `POST /api/permisos/solicitudes` `{"permiso":"levantar-bloqueo-total"}` → **201** Pendiente (anotar su `id`). Repetir el levantamiento → **403** otra vez (la solicitud no está aprobada). Admin: `POST /api/permisos/solicitudes/{id}/aprobar` `{"minutosVigencia":30}` → **200**. Agente: repetir el levantamiento → **200** `"estado":"Activa"`.
+7. **Cancelar por pérdida o robo** — Agente: `POST /api/tarjetas/1/cancelar` `{"nota":"Robo reportado por el cliente."}` → **200** `"estado":"Cancelada"`. Estado terminal: `POST /api/tarjetas/1/reconocer`, `/no-reconocer` o `/levantar-bloqueo-total` → **400** y sigue Cancelada.
+8. **Historial de transiciones** — Agente: `GET /api/tarjetas/1/historial` → **403** "…Se requiere el rol Administrador." Admin: lo mismo → **200** con cada transición: estado anterior y nuevo, `ejecutadoPor` ("Sistema" o el nombre del agente), nota y fecha.
+9. **RD-09** — Detener la API (`Ctrl+C`) y ejecutar otra vez `dotnet run --project src/TrackingTiger` (misma terminal, mismo `DB_RUTA`): `GET /api/tarjetas/1` sigue en `Cancelada`.
 
 ### Gestión de permisos (RF-GP-01 a 07, RD-04, RD-06, RD-07, RD-09)
 
@@ -215,7 +246,33 @@ Ejecuta toda la suite de `tests/TrackingTiger.Pruebas` (xUnit). Las pruebas de G
 - `MaquinaEstadosSolicitudPruebas.cs` ejercita `MaquinaEstadosSolicitud` directamente, sin base de datos.
 - `ServicioSolicitudesPermisoPruebas.cs` ejercita `ServicioSolicitudesPermiso` con una base SQLite en memoria y un reloj fijo; cada prueba tiene su propia base vacía.
 
-Cada prueba crea sus propios datos, así que son independientes y pasan en cualquier orden; cada una marca sus fases `Preparar`, `Actuar` y `Verificar` y lleva un comentario con el requisito que verifica.
+Las pruebas del módulo de negocio están en `tests/TrackingTiger.Pruebas/Tarjetas/` y tampoco levantan la aplicación:
+
+- `MaquinaEstadosTarjetaPruebas.cs` ejercita `MaquinaEstadosTarjeta` directamente, sin base de datos: una prueba por cada fila de las tablas de `docs/maquina-de-estados.md`, el estado terminal y las condiciones.
+- `IntegracionTarjetasPermisosPruebas.cs` es la prueba de integración: usa `ServicioTarjetas` y `ServicioSolicitudesPermiso` **reales** (sin dobles) sobre una base SQLite en memoria. Verifica las dos caras: levantar un Bloqueo Total se rechaza mientras la solicitud no está aprobada (pendiente o rechazada) y se permite después de que un Administrador la aprueba.
+
+Cada prueba crea sus propios datos, así que son independientes y pasan en cualquier orden; cada una marca sus fases `Preparar`, `Actuar` y `Verificar` y lleva un comentario con el requisito o la fila de la tabla que verifica.
+
+**Máquina de estados de la Tarjeta** (filas de `docs/maquina-de-estados.md`):
+
+| Fila | Prueba |
+|---|---|
+| Permitida 1 — Activa → BloqueoSuave (sistema) | `IntentarTransicion_ActivaABloqueoSuavePorElSistema_SePermiteYQuedaEnElHistorialSinUsuario` |
+| Permitida 2 — BloqueoSuave → Activa | `IntentarTransicion_BloqueoSuaveAActivaPorUnAgente_SePermite` |
+| Permitida 3 — BloqueoSuave → BloqueoTotal | `IntentarTransicion_BloqueoSuaveABloqueoTotalPorUnAgenteConNota_SePermite` |
+| Permitida 4 — BloqueoTotal → Activa | `IntentarTransicion_BloqueoTotalAActivaPorUnAgenteConNota_SePermite` |
+| Permitida 5 — Activa → Cancelada | `IntentarTransicion_ActivaACanceladaPorUnAgenteConNota_SePermite` |
+| Permitida 6 — BloqueoSuave → Cancelada | `IntentarTransicion_BloqueoSuaveACanceladaPorUnAgenteConNota_SePermite` |
+| Permitida 7 — BloqueoTotal → Cancelada | `IntentarTransicion_BloqueoTotalACanceladaPorUnAgenteConNota_SePermite` |
+| Prohibida 1 — Activa → BloqueoTotal | `IntentarTransicion_ActivaABloqueoTotal_SeRechazaYElEstadoNoCambia` |
+| Prohibida 2 — BloqueoTotal → BloqueoSuave | `IntentarTransicion_BloqueoTotalABloqueoSuave_SeRechazaYElEstadoNoCambia` |
+| Prohibida 3 — Cancelada → Activa | `IntentarTransicion_CanceladaAActiva_SeRechazaYElEstadoNoCambia` |
+| Estado terminal — de Cancelada no se sale | `IntentarTransicion_DesdeCancelada_NoSaleANingunEstado`, `EsTerminal_Cancelada_NingunaTransicionParteDeEse` |
+| Condiciones | `IntentarTransicion_ActivaABloqueoSuavePorUnAgente_SeRechazaYElEstadoNoCambia`, `IntentarTransicion_BloqueoSuaveAActivaSinAgente_SeRechazaYElEstadoNoCambia`, `IntentarTransicion_BloqueoSuaveABloqueoTotalSinNota_SeRechazaYElEstadoNoCambia`, `IntentarTransicion_BloqueoTotalAActivaSinNota_SeRechazaYElEstadoNoCambia`, `IntentarTransicion_ConOrigenExigidoDistintoDelActual_SeRechazaYElEstadoNoCambia` |
+
+**Integración con Gestión de permisos:** `LevantarBloqueoTotalAsync_ConLaSolicitudPendiente_SeRechazaYLaTarjetaSigueEnBloqueoTotal`, `LevantarBloqueoTotalAsync_ConLaSolicitudRechazada_SeRechazaYLaTarjetaSigueEnBloqueoTotal`, `LevantarBloqueoTotalAsync_DespuesDeQueUnAdministradorApruebaLaSolicitud_LaTarjetaVuelveAActiva`.
+
+**Gestión de permisos:**
 
 | Requisito | Pruebas |
 |---|---|
@@ -228,6 +285,17 @@ Cada prueba crea sus propios datos, así que son independientes y pasan en cualq
 | RF-GP-07 — nadie resuelve su propia solicitud | `Aprobar_PropiaSolicitud_SeRechazaYSigueEnPendiente`, `Rechazar_PropiaSolicitud_SeRechazaYSigueEnPendiente`, `AprobarAsync_AdministradorSobreSuPropiaSolicitud_SeRechazaYSiguePendiente`, `RechazarAsync_AdministradorSobreSuPropiaSolicitud_SeRechazaYSiguePendiente` |
 
 ## Defectos
+
+### Práctica 3 (módulo de negocio)
+
+Cada etiqueta `practica-3-defecto-N` planta un defecto sobre `practica-3` (solo código de producción); con él, `dotnet test` falla al menos en la prueba indicada.
+
+1. `IntentarTransicion_ActivaABloqueoTotal_SeRechazaYElEstadoNoCambia`: una tarjeta Activa no puede pasar directo a BloqueoTotal; el intento se rechaza y sigue Activa.
+2. `IntentarTransicion_DesdeCancelada_NoSaleANingunEstado` (también `EsTerminal_Cancelada_NingunaTransicionParteDeEse` e `IntentarTransicion_CanceladaAActiva_SeRechazaYElEstadoNoCambia`): de Cancelada no se sale hacia ningún estado.
+3. `IntentarTransicion_ActivaABloqueoSuavePorUnAgente_SeRechazaYElEstadoNoCambia`: el Bloqueo Suave solo lo pone el sistema; si lo intenta un agente se rechaza y la tarjeta sigue Activa.
+4. `LevantarBloqueoTotalAsync_ConLaSolicitudPendiente_SeRechazaYLaTarjetaSigueEnBloqueoTotal` (también `LevantarBloqueoTotalAsync_ConLaSolicitudRechazada_SeRechazaYLaTarjetaSigueEnBloqueoTotal`), prueba de integración: sin un permiso aprobado en Gestión de permisos, levantar el Bloqueo Total se rechaza y la tarjeta sigue en BloqueoTotal.
+
+### Práctica 2 (Gestión de permisos)
 
 Defectos de la variante B (Práctica 2). Cada etiqueta `practica-2-defecto-N` planta uno sobre `practica-2`; con él, `dotnet test` falla al menos en la prueba indicada.
 
@@ -248,7 +316,7 @@ src/TrackingTiger/        La aplicación
     Correo/               Cola de correos y enviador SMTP
     Persistencia/         ContextoDatos (EF Core + SQLite)
     Web/                  Manejo global de errores (RD-08)
-  Negocio/Alertas/        AlertaFraude y su máquina de estados
+  Negocio/Tarjetas/       Tarjeta, transacciones, historial, su máquina de estados, servicio y endpoints
   Migrations/             Migraciones de EF Core (se aplican solas al iniciar)
 tests/TrackingTiger.Pruebas/  Pruebas automatizadas con xUnit (RD-12)
 docs/                     pruebas.http, maquina-de-estados.md, requisitos y bitácoras

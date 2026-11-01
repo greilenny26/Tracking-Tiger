@@ -122,6 +122,15 @@ public sealed class ServicioSolicitudesPermiso
     public Task<IReadOnlyList<SolicitudPermisoListado>> ListarDeUsuarioAsync(int usuarioId) =>
         ListarAsync(s => s.SolicitanteId == usuarioId);
 
+    // RF-GP-05: ¿el usuario tiene un permiso aprobado y vigente para la operación? Lo consultan los módulos que
+    // exigen un permiso dentro de su propia lógica (por ejemplo, levantar un Bloqueo Total de una tarjeta).
+    public Task<bool> TienePermisoVigenteAsync(int usuarioId, string operacion)
+    {
+        var ahora = _reloj.AhoraUtc;
+        return _contexto.PermisosOtorgados.AnyAsync(p =>
+            p.UsuarioId == usuarioId && p.Operacion == operacion && p.FechaVencimiento > ahora);
+    }
+
     // RF-GP-03 y RF-GP-04: solo un Administrador resuelve solicitudes. CatalogoOperaciones ya lo exige en el
     // endpoint; el servicio lo vuelve a comprobar para que la regla viva también en Gestión de permisos.
     private Task<bool> EsAdministradorAsync(int usuarioId) =>

@@ -25,11 +25,19 @@ public static class CatalogoOperaciones
     public const string ConsultarMisSolicitudes = "mis-solicitudes";
     public const string AprobarSolicitud = "aprobar-solicitud";
     public const string RechazarSolicitud = "rechazar-solicitud";
+    public const string EmitirTarjeta = "emitir-tarjeta";
+    public const string RegistrarTransaccion = "registrar-transaccion";
+    public const string ConsultarTarjeta = "consultar-tarjeta";
+    public const string ReconocerActividad = "reconocer-actividad";
+    public const string NoReconocerActividad = "no-reconocer-actividad";
+    public const string LevantarBloqueoTotal = "levantar-bloqueo-total";
+    public const string CancelarTarjeta = "cancelar-tarjeta";
+    public const string ConsultarHistorialTarjeta = "historial-tarjeta";
 
     // Gestión de permisos: operaciones que un usuario Estándar puede pedir con una solicitud. Nunca se
     // incluyen las que administran usuarios, roles o solicitudes: aprobar una de esas dejaría que alguien
     // se diera más privilegios a sí mismo (escalada de privilegios).
-    public static readonly IReadOnlyList<string> OperacionesSolicitables = [ListarUsuarios];
+    public static readonly IReadOnlyList<string> OperacionesSolicitables = [ListarUsuarios, LevantarBloqueoTotal];
 
     public static readonly IReadOnlyDictionary<string, ExigenciaAcceso> Exigencias = new Dictionary<string, ExigenciaAcceso>
     {
@@ -56,6 +64,18 @@ public static class CatalogoOperaciones
         // RF-GP-03, RF-GP-04: solo el Administrador resuelve; que no sea su propia solicitud lo decide la máquina (RF-GP-07).
         [AprobarSolicitud]       = ExigenciaAcceso.DeRol(Rol.Administrador),
         [RechazarSolicitud]      = ExigenciaAcceso.DeRol(Rol.Administrador),
+        // RF-NEG-06, módulo Tarjetas. Emitir, registrar transacciones (simulan la red de pago) y consultar: cualquier usuario con sesión.
+        [EmitirTarjeta]          = ExigenciaAcceso.Autenticada,
+        [RegistrarTransaccion]   = ExigenciaAcceso.Autenticada,
+        [ConsultarTarjeta]       = ExigenciaAcceso.Autenticada,
+        // Las acciones sobre la tarjeta las ejecuta el agente de fraude (Estándar), no el Administrador.
+        [ReconocerActividad]     = ExigenciaAcceso.DeRol(Rol.Estandar),
+        [NoReconocerActividad]   = ExigenciaAcceso.DeRol(Rol.Estandar),
+        // Además del rol, ServicioTarjetas exige un permiso aprobado y vigente en Gestión de permisos.
+        [LevantarBloqueoTotal]   = ExigenciaAcceso.DeRol(Rol.Estandar),
+        [CancelarTarjeta]        = ExigenciaAcceso.DeRol(Rol.Estandar),
+        // El Administrador supervisa: revisa el historial de transiciones de cada tarjeta.
+        [ConsultarHistorialTarjeta] = ExigenciaAcceso.DeRol(Rol.Administrador),
     };
 }
 
