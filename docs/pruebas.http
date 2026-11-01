@@ -1335,24 +1335,120 @@ Content-Type: application/json
 #   Esperado: HTTP 401 {"mensaje":"Sesión no válida o vencida."}
 
 ### ------------------------------------------------------------
-### RF-NEG-03 / RD-03 — Entidad central del negocio: AlertaFraude (revisión y base de datos)
+### RF-NEG-03 / RD-03 — Entidad central del negocio: Tarjeta (revisión y base de datos)
 ### ------------------------------------------------------------
-#   1) Estados en un solo lugar: Negocio/Alertas/EstadoAlerta.cs (Detectada, EnRevision, Confirmada, Descartada).
-#   2) En DB Browser (tras "dotnet run"): tabla AlertasFraude con Id, NumeroTarjetaEnmascarado, Monto, Comercio,
-#      FechaTransaccion, NivelRiesgo, Estado (texto), FechaCreacion, FechaResolucion, Observacion.
-#   3) RD-03: "grep -rn Negocio Core/" no devuelve nada; el Core registra la entidad con
-#      ApplyConfigurationsFromAssembly sin nombrarla. Si se borra la carpeta Negocio/ el proyecto sigue compilando.
+#   1) Estados en un solo lugar: Negocio/Tarjetas/EstadoTarjeta.cs (Activa, BloqueoSuave, BloqueoTotal, Cancelada).
+#   2) En DB Browser (tras "dotnet run"): tablas Tarjetas (Estado como texto), Transacciones e HistorialEstadosTarjeta.
+#   3) RD-03: "grep -rn Negocio src/TrackingTiger/Core/" no devuelve nada; el Core registra las entidades con
+#      ApplyConfigurationsFromAssembly sin nombrarlas. Solo Program.cs (punto de arranque) registra ServicioTarjetas.
 
 ### ------------------------------------------------------------
-### RD-04 / RF-NEG-04 / RF-NEG-05 — Transiciones de AlertaFraude en un solo lugar (revisión de código)
+### Tarjetas — RF-NEG-02 a 06, RF-NEG-09 (preparación en el README, sección «Módulo de negocio: Tarjetas»)
 ### ------------------------------------------------------------
-# Sin endpoints todavía (las pruebas llegan en la semana 8). Revisar Negocio/Alertas/MaquinaEstadosAlerta.cs:
-#   - Permitidas: Detectada→EnRevision; EnRevision→Confirmada; EnRevision→Descartada (estas dos exigen observación).
-#   - ProhibidasExplicitas: Detectada→Confirmada y Descartada→Confirmada, cada una con su motivo.
-#   - Terminales (EsTerminal): Confirmada y Descartada; ninguna transición parte de ellas.
-#   - IntentarTransicion rechaza todo lo demás con un mensaje en español y el estado NO cambia.
-#   - Ninguna otra clase cambia AlertaFraude.Estado (AplicarEstado es internal y solo lo llama la máquina).
-# La tabla completa está en docs/maquina-de-estados.md.
+# Usuario 1 = Administrador (token <token-admin>), usuario 2 = agente Estándar (token <token-agente>).
+
+### Funcionalidad 1 — Emitir una tarjeta
+POST http://localhost:5000/api/tarjetas
+Authorization: Bearer <token-agente>
+Content-Type: application/json
+
+{"titular": "Ana Pérez", "ultimosCuatro": "4321", "limiteCredito": 100}
+
+#   Esperado: HTTP 201 {"id":1,"titular":"Ana Pérez","numeroEnmascarado":"**** 4321","limiteCredito":100,
+#             "disponible":100,"estado":"Activa","fechaEmision":"<UTC>"}
+#   Con "ultimosCuatro":"12a4" → 400 {"mensaje":"ultimosCuatro debe tener exactamente 4 dígitos."} (RD-07)
+#   Sin Authorization → 401 {"mensaje":"Sesión no válida o vencida."} (RF-NEG-06)
+
+### Funcionalidad 2 — Registrar una transacción (aprobada)
+POST http://localhost:5000/api/tarjetas/1/transacciones
+Authorization: Bearer <token-agente>
+Content-Type: application/json
+
+{"monto": 40, "comercio": "Farmacia"}
+
+#   Esperado: HTTP 200 {"mensaje":"Transacción aprobada.","tarjeta":{...,"disponible":60.0,"estado":"Activa"},"transaccion":{...,"aprobada":true}}
+
+### Funcionalidad 2 — Ráfaga: enviar esta petición 3 veces
+POST http://localhost:5000/api/tarjetas/1/transacciones
+Authorization: Bearer <token-agente>
+Content-Type: application/json
+
+{"monto": 500, "comercio": "Tienda en línea"}
+
+#   Esperado: 1.ª y 2.ª → 200 "Transacción declinada: crédito disponible insuficiente." y "estado":"Activa".
+#             3.ª → 200 "... La tarjeta pasó a BloqueoSuave por una ráfaga de declinaciones." y "estado":"BloqueoSuave".
+#   Con la tarjeta bloqueada otra transacción → 200 "Transacción declinada: la tarjeta está en BloqueoSuave." y el estado no cambia.
+
+### Funcionalidad 3 — Consultar la tarjeta
+GET http://localhost:5000/api/tarjetas/1
+Authorization: Bearer <token-agente>
+
+#   Esperado: HTTP 200 {"mensaje":"La tarjeta está en BloqueoSuave.","tarjeta":{...}}. Con id 999 → 404.
+
+### Funcionalidad 4 — El cliente reconoce la actividad (BloqueoSuave → Activa)
+POST http://localhost:5000/api/tarjetas/1/reconocer
+Authorization: Bearer <token-agente>
+
+#   Esperado: HTTP 200 {"mensaje":"La tarjeta pasó a Activa.",...}
+#   Con <token-admin> → 403 "...Se requiere el rol Estándar." (RF-NEG-06)
+#   Para seguir: repetir 3 veces la ráfaga → la tarjeta vuelve a BloqueoSuave.
+
+### Funcionalidad 5 — El cliente no reconoce la actividad (BloqueoSuave → BloqueoTotal)
+POST http://localhost:5000/api/tarjetas/1/no-reconocer
+Authorization: Bearer <token-agente>
+Content-Type: application/json
+
+{"nota": "El cliente no reconoce las compras."}
+
+#   Esperado: HTTP 200 {"mensaje":"La tarjeta pasó a BloqueoTotal.",...}
+#   Con {"nota":""} → 400 "Para pasar a BloqueoTotal se exige una nota." y no cambia.
+#   Después, /reconocer → 400 "Esta operación solo aplica a una tarjeta en BloqueoSuave; la tarjeta está en BloqueoTotal."
+
+### Funcionalidad 6 — Levantar el Bloqueo Total sin permiso (Gestión de permisos)
+POST http://localhost:5000/api/tarjetas/1/levantar-bloqueo-total
+Authorization: Bearer <token-agente>
+Content-Type: application/json
+
+{"nota": "Validado por llamada."}
+
+#   Esperado: HTTP 403 {"mensaje":"Para levantar un Bloqueo Total necesitas el permiso levantar-bloqueo-total
+#             aprobado por un Administrador y vigente."} y la tarjeta sigue en BloqueoTotal.
+
+### Funcionalidad 6 — El agente pide el permiso
+POST http://localhost:5000/api/permisos/solicitudes
+Authorization: Bearer <token-agente>
+Content-Type: application/json
+
+{"permiso": "levantar-bloqueo-total"}
+
+#   Esperado: HTTP 201 con "estado":"Pendiente". Levantar ahora → sigue 403 (no está aprobada).
+
+### Funcionalidad 6 — El Administrador aprueba (usar el id de la solicitud)
+POST http://localhost:5000/api/permisos/solicitudes/<id>/aprobar
+Authorization: Bearer <token-admin>
+Content-Type: application/json
+
+{"minutosVigencia": 30}
+
+#   Esperado: HTTP 200 "estado":"Aplicada". Repetir el levantamiento → 200 {"mensaje":"La tarjeta pasó a Activa.",...}
+
+### Funcionalidad 7 — Cancelar por pérdida o robo (terminal)
+POST http://localhost:5000/api/tarjetas/1/cancelar
+Authorization: Bearer <token-agente>
+Content-Type: application/json
+
+{"nota": "Robo reportado por el cliente."}
+
+#   Esperado: HTTP 200 {"mensaje":"La tarjeta pasó a Cancelada.",...}
+#   Después, /reconocer, /no-reconocer o /levantar-bloqueo-total → 400 y sigue Cancelada (RF-NEG-05).
+
+### Funcionalidad 8 — Historial de transiciones (Administrador)
+GET http://localhost:5000/api/tarjetas/1/historial
+Authorization: Bearer <token-admin>
+
+#   Esperado: HTTP 200 [{"estadoAnterior":"Activa","estadoNuevo":"BloqueoSuave","ejecutadoPor":"Sistema",
+#             "nota":"Ráfaga: 3 declinaciones en 60 minutos.",...}, ...] en orden.
+#   Con <token-agente> → 403 "...Se requiere el rol Administrador."
 
 ### ------------------------------------------------------------
 ### RD-08 — Manejo global de errores de la API
