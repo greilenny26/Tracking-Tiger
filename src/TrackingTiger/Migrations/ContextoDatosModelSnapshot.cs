@@ -299,15 +299,52 @@ namespace Tracking_Tiger.Migrations
                     b.ToTable("SolicitudesPermiso", (string)null);
                 });
 
-            modelBuilder.Entity("Tracking_Tiger.Negocio.Alertas.AlertaFraude", b =>
+            modelBuilder.Entity("Tracking_Tiger.Negocio.Tarjetas.HistorialEstadoTarjeta", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Comercio")
+                    b.Property<string>("EstadoAnterior")
                         .IsRequired()
-                        .HasMaxLength(200)
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EstadoNuevo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nota")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TarjetaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TarjetaId");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("HistorialEstadosTarjeta", (string)null);
+                });
+
+            modelBuilder.Entity("Tracking_Tiger.Negocio.Tarjetas.Tarjeta", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("Consumido")
+                        .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Estado")
@@ -315,36 +352,61 @@ namespace Tracking_Tiger.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("FechaCreacion")
+                    b.Property<DateTime>("FechaEmision")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime?>("FechaResolucion")
+                    b.Property<decimal>("LimiteCredito")
+                        .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("FechaTransaccion")
+                    b.Property<string>("Titular")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UltimosCuatro")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Tarjetas", (string)null);
+                });
+
+            modelBuilder.Entity("Tracking_Tiger.Negocio.Tarjetas.Transaccion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Aprobada")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Comercio")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("Fecha")
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("Monto")
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("NivelRiesgo")
+                    b.Property<string>("MotivoDeclinacion")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TarjetaId")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("NumeroTarjetaEnmascarado")
-                        .IsRequired()
-                        .HasMaxLength(19)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Observacion")
-                        .HasMaxLength(1000)
-                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Estado");
+                    b.HasIndex("TarjetaId", "Fecha");
 
-                    b.ToTable("AlertasFraude", (string)null);
+                    b.ToTable("Transacciones", (string)null);
                 });
 
             modelBuilder.Entity("Tracking_Tiger.Core.ControlAcceso.CodigoRecuperacion", b =>
@@ -410,6 +472,29 @@ namespace Tracking_Tiger.Migrations
                     b.HasOne("Tracking_Tiger.Core.ControlAcceso.Usuario", null)
                         .WithMany()
                         .HasForeignKey("SolicitanteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Tracking_Tiger.Negocio.Tarjetas.HistorialEstadoTarjeta", b =>
+                {
+                    b.HasOne("Tracking_Tiger.Negocio.Tarjetas.Tarjeta", null)
+                        .WithMany()
+                        .HasForeignKey("TarjetaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Tracking_Tiger.Core.ControlAcceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Tracking_Tiger.Negocio.Tarjetas.Transaccion", b =>
+                {
+                    b.HasOne("Tracking_Tiger.Negocio.Tarjetas.Tarjeta", null)
+                        .WithMany()
+                        .HasForeignKey("TarjetaId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
