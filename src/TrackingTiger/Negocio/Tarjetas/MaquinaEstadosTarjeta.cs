@@ -33,6 +33,8 @@ public static class MaquinaEstadosTarjeta
             "Pérdida o robo.", ExigeNota: true),
         new(EstadoTarjeta.BloqueoTotal, EstadoTarjeta.Cancelada, EjecutorTarjeta.Agente,
             "Pérdida o robo.", ExigeNota: true),
+        new(EstadoTarjeta.Cancelada, EstadoTarjeta.Activa, EjecutorTarjeta.Agente,
+        "Defecto 2.", ExigeNota: true),    
     ];
 
     // RF-NEG-04: transiciones prohibidas de forma explícita, con su motivo. Solo dan el mensaje del rechazo:
