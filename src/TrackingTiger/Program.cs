@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
+using Tracking_Tiger.Core.Documentos;
 using Tracking_Tiger.Core.Persistencia;
 using Tracking_Tiger.Core.Web;
 using Tracking_Tiger.Core.Permisos;
@@ -43,6 +44,10 @@ builder.Services.AddScoped<ServicioAdministracionUsuarios>();
 builder.Services.AddScoped<ServicioRecuperacionContrasena>();
 builder.Services.AddScoped<ServicioSolicitudesPermiso>();
 builder.Services.AddScoped<ServicioTarjetas>();
+builder.Services.AddScoped<ServicioDocumentos>();
+
+// RF-DOC-05: el contenido de los documentos vive en SeaweedFS (SEAWEEDFS_URL), no en la base ni en la imagen.
+builder.Services.AddHttpClient<IAlmacenDocumentos, AlmacenSeaweedFs>(cliente => cliente.Timeout = AlmacenSeaweedFs.TiempoMaximo);
 
 // Esquema de autenticación por defecto (RF-CA-07): valida la credencial de sesión; lo usa
 // FiltroAutorizacionOperaciones para las operaciones que exigen sesión o rol.
