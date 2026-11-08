@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
+using Tracking_Tiger.Core.Documentos;
 using Tracking_Tiger.Core.Permisos;
 
 namespace Tracking_Tiger.Core.Persistencia;
@@ -20,6 +21,7 @@ public class ContextoDatos : DbContext
     public DbSet<CodigoRecuperacion> CodigosRecuperacion => Set<CodigoRecuperacion>();
     public DbSet<SolicitudPermiso> SolicitudesPermiso => Set<SolicitudPermiso>();
     public DbSet<PermisoOtorgado> PermisosOtorgados => Set<PermisoOtorgado>();
+    public DbSet<Documento> Documentos => Set<Documento>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -138,6 +140,23 @@ public class ContextoDatos : DbContext
             permiso.HasIndex(p => new { p.UsuarioId, p.Operacion });
             permiso.HasOne<Usuario>().WithMany().HasForeignKey(p => p.UsuarioId).OnDelete(DeleteBehavior.Restrict);
             permiso.HasOne<SolicitudPermiso>().WithMany().HasForeignKey(p => p.SolicitudId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Documento>(documento =>
+        {
+            documento.ToTable("Documentos");
+            documento.HasKey(d => d.Id);
+            documento.Property(d => d.Nombre).IsRequired().HasMaxLength(255);
+            documento.Property(d => d.Tipo).IsRequired().HasMaxLength(100);
+            documento.Property(d => d.Tamano).IsRequired();
+            documento.Property(d => d.FechaSubida).IsRequired();
+            documento.Property(d => d.RutaAlmacenamiento).IsRequired().HasMaxLength(200);
+            documento.Property(d => d.Eliminado).IsRequired().HasDefaultValue(false);
+            documento.Property(d => d.FechaEliminacion);
+            // RF-DOC-02: cada usuario lista los suyos.
+            documento.HasIndex(d => d.UsuarioId);
+            // Restrict: el documento es historial de quien lo subió; borrar el usuario no debe borrarlo en silencio.
+            documento.HasOne<Usuario>().WithMany().HasForeignKey(d => d.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

@@ -219,6 +219,51 @@ namespace Tracking_Tiger.Migrations
                     b.ToTable("CorreosEnCola", (string)null);
                 });
 
+            modelBuilder.Entity("Tracking_Tiger.Core.Documentos.Documento", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Eliminado")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("FechaEliminacion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FechaSubida")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RutaAlmacenamiento")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Tamano")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("Documentos", (string)null);
+                });
+
             modelBuilder.Entity("Tracking_Tiger.Core.Permisos.PermisoOtorgado", b =>
                 {
                     b.Property<int>("Id")
@@ -440,6 +485,15 @@ namespace Tracking_Tiger.Migrations
                         .IsRequired();
 
                     b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("Tracking_Tiger.Core.Documentos.Documento", b =>
+                {
+                    b.HasOne("Tracking_Tiger.Core.ControlAcceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Tracking_Tiger.Core.Permisos.PermisoOtorgado", b =>
