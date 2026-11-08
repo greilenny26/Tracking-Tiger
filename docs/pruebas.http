@@ -1468,3 +1468,69 @@ Content-Type: application/json
 #   Esperado: HTTP 400
 #             {"mensaje":"El cuerpo de la solicitud no es un JSON válido o no tiene el formato esperado."}
 #   Lo mismo con cuerpo vacío o con un tipo incorrecto (texto donde va un número).
+
+### ------------------------------------------------------------
+### Manejador de documentos (RF-DOC-01 a 04)
+### ------------------------------------------------------------
+# Necesita SeaweedFS en SEAWEEDFS_URL (con docker compose ya viene). Todas exigen sesión:
+# sin el encabezado Authorization → 401 "Sesión no válida o vencida."
+# <token-ana> y <token-beto>: dos usuarios Estándar. <token-admin>: un Administrador.
+
+### RF-DOC-01 — Subir un documento (multipart/form-data, campo "archivo")
+POST http://localhost:5000/api/documentos
+Authorization: Bearer <token-ana>
+Content-Type: multipart/form-data; boundary=limite
+
+--limite
+Content-Disposition: form-data; name="archivo"; filename="nota.txt"
+Content-Type: text/plain
+
+hola desde seaweedfs
+--limite--
+
+#   Esperado: HTTP 201 {"id":1,"nombre":"nota.txt","tipo":"text/plain","tamano":20,
+#             "fechaSubida":"...Z","usuarioId":<ana>,"subidoPor":"ana"}
+#   Sin el campo "archivo" → 400 "Falta el archivo. Envíalo en el campo 'archivo' del formulario."
+#   Con un archivo vacío   → 400 "El archivo está vacío."
+#   Con más de 10 MB       → 400 "El archivo supera el tamaño máximo de 10 MB."
+#   Con SeaweedFS detenido → 503 "El almacén de documentos no está disponible. Intenta de nuevo más tarde."
+#                            (el resto de la API sigue respondiendo)
+
+### RF-DOC-01 — Consultar el registro
+GET http://localhost:5000/api/documentos/1
+Authorization: Bearer <token-ana>
+
+#   Esperado: HTTP 200 {"mensaje":"Documento encontrado.","documento":{...todos los datos...}}
+#   Con <token-beto> → 403 "Solo el dueño del documento o un Administrador pueden hacer esta operación."
+
+### RF-DOC-02 — Listar
+GET http://localhost:5000/api/documentos
+Authorization: Bearer <token-ana>
+
+#   Esperado: HTTP 200 con solo los documentos de ana que no están eliminados.
+#   Con <token-beto> → [] (no ve los de ana).
+#   Con <token-admin> → los de todos los usuarios, sin los eliminados.
+
+### RF-DOC-03 — Descargar
+GET http://localhost:5000/api/documentos/1/descargar
+Authorization: Bearer <token-ana>
+
+#   Esperado: HTTP 200, Content-Disposition: attachment; filename=nota.txt, cuerpo "hola desde seaweedfs".
+#   Con <token-admin> → 200 (el Administrador descarga cualquiera).
+#   Con <token-beto>  → 403 "Solo el dueño del documento o un Administrador pueden hacer esta operación."
+#   Id inexistente    → 404 "No existe un documento con ese id."
+
+### RF-DOC-04 — Eliminar (lógico)
+DELETE http://localhost:5000/api/documentos/1
+Authorization: Bearer <token-beto>
+
+#   Esperado: HTTP 403 (beto no es el dueño). El documento sigue en el listado de ana.
+
+DELETE http://localhost:5000/api/documentos/1
+Authorization: Bearer <token-ana>
+
+#   Esperado: HTTP 200 {"mensaje":"Documento eliminado.",...}
+#   Después: GET /api/documentos ya no lo incluye (ni para el Administrador),
+#            GET /api/documentos/1/descargar → 404,
+#            pero en la tabla Documentos la fila sigue con Eliminado = 1 y FechaEliminacion en UTC,
+#            y el archivo sigue en SeaweedFS (carpeta /documentos/).

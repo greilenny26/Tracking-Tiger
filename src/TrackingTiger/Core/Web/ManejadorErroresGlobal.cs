@@ -20,8 +20,11 @@ public sealed class ManejadorErroresGlobal : IExceptionHandler
         if (excepcion is BadHttpRequestException solicitudInvalida)
         {
             _registro.LogWarning(excepcion, "Solicitud inválida en {Metodo} {Ruta}", contexto.Request.Method, contexto.Request.Path);
-            await EscribirAsync(contexto, solicitudInvalida.StatusCode,
-                "La solicitud no es válida. Revisa que el cuerpo sea un JSON bien formado.", cancelacion);
+            // 413: el cuerpo supera el límite del servidor (por ejemplo, un documento demasiado grande).
+            var mensaje = solicitudInvalida.StatusCode == StatusCodes.Status413PayloadTooLarge
+                ? "La solicitud es demasiado grande."
+                : "La solicitud no es válida. Revisa que el cuerpo sea un JSON bien formado.";
+            await EscribirAsync(contexto, solicitudInvalida.StatusCode, mensaje, cancelacion);
             return true;
         }
 

@@ -33,6 +33,11 @@ public static class CatalogoOperaciones
     public const string LevantarBloqueoTotal = "levantar-bloqueo-total";
     public const string CancelarTarjeta = "cancelar-tarjeta";
     public const string ConsultarHistorialTarjeta = "historial-tarjeta";
+    public const string SubirDocumento = "subir-documento";
+    public const string ListarDocumentos = "listar-documentos";
+    public const string ConsultarDocumento = "consultar-documento";
+    public const string DescargarDocumento = "descargar-documento";
+    public const string EliminarDocumento = "eliminar-documento";
 
     // Gestión de permisos: operaciones que un usuario Estándar puede pedir con una solicitud. Nunca se
     // incluyen las que administran usuarios, roles o solicitudes: aprobar una de esas dejaría que alguien
@@ -76,6 +81,13 @@ public static class CatalogoOperaciones
         [CancelarTarjeta]        = ExigenciaAcceso.DeRol(Rol.Estandar),
         // El Administrador supervisa: revisa el historial de transiciones de cada tarjeta.
         [ConsultarHistorialTarjeta] = ExigenciaAcceso.DeRol(Rol.Administrador),
+        // RF-DOC-01 a 04: todas exigen sesión. Que solo el dueño o un Administrador vean, descarguen o eliminen
+        // cada documento lo decide ServicioDocumentos, porque depende del documento concreto.
+        [SubirDocumento]         = ExigenciaAcceso.Autenticada,
+        [ListarDocumentos]       = ExigenciaAcceso.Autenticada,
+        [ConsultarDocumento]     = ExigenciaAcceso.Autenticada,
+        [DescargarDocumento]     = ExigenciaAcceso.Autenticada,
+        [EliminarDocumento]      = ExigenciaAcceso.Autenticada,
     };
 }
 
