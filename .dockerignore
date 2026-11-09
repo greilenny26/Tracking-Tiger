@@ -1,0 +1,25 @@
+# Secretos: nunca entran a la imagen (RD-10).
+.env
+.env.*
+
+# Carpetas de compilación y dependencias instaladas.
+**/bin/
+**/obj/
+
+# Historial de git y archivos del entorno de desarrollo.
+.git/
+.github/
+.vs/
+.vscode/
+.claude/
+
+# Bases de datos locales.
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+# Lo que la imagen no necesita.
+tests/
+docs/
+*.md
+*.cmd
