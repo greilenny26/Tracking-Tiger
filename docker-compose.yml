@@ -1,0 +1,57 @@
+name: tracking-tiger
+
+services:
+  # La aplicación: el único servicio que publica un puerto en el equipo.
+  app:
+    build: .
+    env_file: .env
+    environment:
+      DB_RUTA: /datos/trackingtiger.db
+      SEAWEEDFS_URL: http://seaweedfs:8888
+    ports:
+      - "5000:8080"
+    volumes:
+      - basedatos:/datos
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    healthcheck:
+      # La imagen no trae curl: se comprueba que el puerto acepte conexiones.
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+    restart: unless-stopped
+
+  # Proceso aparte que envía la cola de correos (RF-NOT-09), con la misma imagen de la aplicación.
+  correo:
+    build: .
+    env_file: .env
+    environment:
+      DB_RUTA: /datos/trackingtiger.db
+      # Solo avisos y errores: así los correos del modo consola no se pierden entre el registro de cada consulta.
+      Logging__LogLevel__Default: Warning
+    entrypoint: ["sh", "-c", "while true; do dotnet TrackingTiger.dll enviar-correos; sleep 15; done"]
+    volumes:
+      - basedatos:/datos
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Almacén de los archivos de los documentos (RF-DOC-05). Solo accesible dentro de la composición.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.50
+    command: ["server", "-filer"]
+    volumes:
+      - documentos:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://$$(hostname -i):8888/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+    restart: unless-stopped
+
+volumes:
+  basedatos:
+  documentos:
