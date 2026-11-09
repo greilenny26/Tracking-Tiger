@@ -11,6 +11,7 @@ public sealed class ConfiguracionSmtp
     public const string VariableClave = "SMTP_CLAVE";
     public const string VariableRemitente = "SMTP_REMITENTE";
 
+    private const string HostModoConsola = "consola";
     private const int PuertoPredeterminado = 587;
 
     public string Host { get; }
@@ -18,6 +19,9 @@ public sealed class ConfiguracionSmtp
     public string Usuario { get; }
     public string Clave { get; }
     public string Remitente { get; }
+
+    // SMTP_HOST=consola: los correos se escriben en la salida del proceso en lugar de enviarse (solo para pruebas).
+    public bool EsModoConsola => Host.Equals(HostModoConsola, StringComparison.OrdinalIgnoreCase);
 
     private ConfiguracionSmtp(string host, int puerto, string usuario, string clave, string remitente)
     {

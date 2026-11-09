@@ -16,6 +16,9 @@ public sealed class EnviadorSmtp : IEnviadorCorreo
 
     public async Task<ISesionCorreo> AbrirSesionAsync(ConfiguracionSmtp configuracion)
     {
+        if (configuracion.EsModoConsola)
+            return new SesionCorreoConsola(Console.Out);
+
         if (!MailboxAddress.TryParse(configuracion.Remitente, out var remitente))
             throw new ErrorEnvioCorreo(
                 $"La variable de entorno {ConfiguracionSmtp.VariableRemitente} (o {ConfiguracionSmtp.VariableUsuario}) no es una dirección de correo válida.",
