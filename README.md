@@ -19,12 +19,84 @@ Todos los casos de prueba manuales, con la petición y el resultado esperado, es
 ```
 git clone https://github.com/greilenny26/Tracking-Tiger.git
 cd Tracking-Tiger
-git checkout practica-3
+git checkout practica-4
 ```
+
+## Contenedor
+
+Es la forma recomendada de levantar el proyecto. Solo necesita [Docker](https://www.docker.com/products/docker-desktop/) (no hace falta instalar .NET).
+
+**1. Copiar el archivo de ejemplo** (es el único paso previo), desde la raíz del repositorio:
+
+```
+cp .env.example .env
+```
+
+En CMD de Windows: `copy .env.example .env`.
+
+**2. Levantar el proyecto:**
+
+```
+docker compose up --build
+```
+
+La API responde en **http://localhost:5000**. Sin sesión, `http://localhost:5000/api/documentos` debe responder 401 con `{"mensaje":"Sesión no válida o vencida."}`.
+
+**3. Detenerlo:** `Ctrl+C` en esa terminal, o desde otra:
+
+```
+docker compose down
+```
+
+Los datos sobreviven a `docker compose down` y a volver a levantar. `docker compose down -v` borra los volúmenes y con ellos **todos** los datos.
+
+### Qué se levanta
+
+| Servicio | Qué hace | Puerto en el equipo |
+|---|---|---|
+| `app` | La API. Al arrancar aplica las migraciones y crea el Administrador inicial si no existe. | 5000 |
+| `correo` | Proceso aparte que envía la cola de correos cada 15 segundos (RF-NOT-09). | Ninguno |
+| `seaweedfs` | Almacén de los archivos de los documentos (RF-DOC-05). | Ninguno |
+
+| Volumen | Qué guarda |
+|---|---|
+| `basedatos` | La base de datos SQLite: usuarios, solicitudes, tarjetas y registros de documentos (RD-09). |
+| `documentos` | Los archivos de los documentos (RF-DOC-05). |
+
+### Usuario Administrador
+
+Se crea solo, con los valores de `.env`. Con el `.env.example` sin cambios: correo `admin@ejemplo.test`, contraseña `CambiaEsta123`.
+
+### Correos: enlace de activación y código de recuperación
+
+Con el `.env.example` sin cambios, `SMTP_HOST=consola`: los correos **no se envían**, se escriben en el registro del servicio `correo` (solo para pruebas). Unos segundos después de registrar un usuario o de pedir la recuperación de contraseña, ejecutar:
+
+```
+docker compose logs correo
+```
+
+Ahí aparecen el enlace de activación y el código de recuperación. Para enviar correos de verdad, poner los datos de un servidor SMTP en `.env` y reiniciar.
+
+Con el proyecto en contenedores, en las secciones siguientes no hacen falta `.env.cmd`, `dotnet run`, `crear-admin` ni `enviar-correos`.
+
+### Documentos (RF-DOC-01 a 05)
+
+Todas las operaciones exigen sesión. Con `TOKEN` igual al `token` que devuelve `POST /api/auth/login`:
+
+```
+curl -H "Authorization: Bearer TOKEN" -F "archivo=@nota.txt;type=text/plain" http://localhost:5000/api/documentos
+curl -H "Authorization: Bearer TOKEN" http://localhost:5000/api/documentos
+curl -H "Authorization: Bearer TOKEN" http://localhost:5000/api/documentos/1/descargar
+curl -X DELETE -H "Authorization: Bearer TOKEN" http://localhost:5000/api/documentos/1
+```
+
+Otro usuario Estándar recibe 403 al descargar o eliminar ese documento, y no lo ve en su listado. El Administrador ve, descarga y elimina los de todos. La eliminación es lógica: la fila sigue en la tabla `Documentos` con `Eliminado = 1`. Casos completos en `docs/pruebas.http`.
+
+**Persistencia:** subir un documento, ejecutar `docker compose down` (sin `-v`) y `docker compose up`: el documento sigue en el listado, se descarga y el usuario inicia sesión.
 
 ## Variables de entorno
 
-Las credenciales **nunca** están en el repositorio (RD-10): se leen de variables de entorno. `.env.example` lista los nombres; los valores van en un archivo local `.env.cmd`, que está ignorado por Git.
+Las credenciales **nunca** están en el repositorio (RD-10): se leen de variables de entorno. `.env.example` lista todas con un valor de ejemplo; los valores reales van en un archivo local que está ignorado por Git: `.env` con Docker (ver «Contenedor»), o `.env.cmd` para ejecutar sin Docker, como se explica a continuación.
 
 | Variable | Para qué sirve | ¿Obligatoria? |
 |---|---|---|
@@ -37,6 +109,7 @@ Las credenciales **nunca** están en el repositorio (RD-10): se leen de variable
 | `ADMIN_CORREO_INICIAL` | Correo del primer Administrador (comando `crear-admin`). | Para `crear-admin` |
 | `ADMIN_CLAVE_INICIAL` | Contraseña del primer Administrador (mínimo 8 caracteres, con letras y números). | Para `crear-admin` |
 | `DB_RUTA` | Ruta del archivo de la base de datos SQLite. Vacío → `src\TrackingTiger\trackingtiger.db`. | No |
+| `SEAWEEDFS_URL` | URL del Filer de SeaweedFS, donde se guardan los archivos de los documentos. | Para subir y descargar documentos |
 Crear `.env.cmd` en la raíz del proyecto (formato CMD, sin espacios alrededor del `=`):
 
 ```
