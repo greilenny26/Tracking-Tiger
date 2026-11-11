@@ -28,11 +28,12 @@ public sealed class ControladorTarjetas : ControllerBase
             : Responder(resultado);
     }
 
-    // 200 con la transacción (aprobada o declinada) y la tarjeta; 400 si un dato no es válido; 404 si no existe.
+    // 200 con la transacción (aprobada o declinada) y la tarjeta; 400 si un dato no es válido; 404 si no existe;
+    // 503 si la compra es en otra moneda y no se pudo obtener la tasa de cambio.
     [Operacion(CatalogoOperaciones.RegistrarTransaccion)]
     [HttpPost("{id:int}/transacciones")]
     public async Task<IActionResult> RegistrarTransaccion(int id, [FromBody] SolicitudRegistrarTransaccion cuerpo) =>
-        Responder(await _servicio.RegistrarTransaccionAsync(id, cuerpo.Monto, cuerpo.Comercio));
+        Responder(await _servicio.RegistrarTransaccionAsync(id, cuerpo.Monto, cuerpo.Comercio, cuerpo.Moneda));
 
     [Operacion(CatalogoOperaciones.ConsultarTarjeta)]
     [HttpGet("{id:int}")]
@@ -83,6 +84,7 @@ public sealed class ControladorTarjetas : ControllerBase
         EstadoOperacionTarjeta.Exito => Ok(new { mensaje = resultado.Mensaje, tarjeta = resultado.Tarjeta, transaccion = resultado.Transaccion }),
         EstadoOperacionTarjeta.NoEncontrada => NotFound(new { mensaje = resultado.Mensaje }),
         EstadoOperacionTarjeta.SinPermiso => StatusCode(StatusCodes.Status403Forbidden, new { mensaje = resultado.Mensaje }),
+        EstadoOperacionTarjeta.ServicioNoDisponible => StatusCode(StatusCodes.Status503ServiceUnavailable, new { mensaje = resultado.Mensaje }),
         _ => BadRequest(new { mensaje = resultado.Mensaje })
     };
 
@@ -96,6 +98,6 @@ public sealed class ControladorTarjetas : ControllerBase
 // Cuerpos JSON. Admiten null para dar un mensaje controlado (RD-07).
 public sealed record SolicitudEmitirTarjeta(string? Titular, string? UltimosCuatro, decimal? LimiteCredito);
 
-public sealed record SolicitudRegistrarTransaccion(decimal? Monto, string? Comercio);
+public sealed record SolicitudRegistrarTransaccion(decimal? Monto, string? Comercio, string? Moneda);
 
 public sealed record SolicitudNotaTarjeta(string? Nota);

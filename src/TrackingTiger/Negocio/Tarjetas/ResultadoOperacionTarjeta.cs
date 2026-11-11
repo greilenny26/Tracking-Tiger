@@ -8,7 +8,9 @@ public enum EstadoOperacionTarjeta
     NoPermitida,
     // Falta el permiso aprobado y vigente de Gestión de permisos.
     SinPermiso,
-    DatoInvalido
+    DatoInvalido,
+    // No se pudo consultar un servicio externo: no se registró nada y la tarjeta no cambió.
+    ServicioNoDisponible
 }
 
 // Resultado de una operación del módulo Tarjetas. Transaccion solo viene al registrar una transacción.
@@ -26,6 +28,9 @@ public sealed record ResultadoOperacionTarjeta(EstadoOperacionTarjeta Estado, st
     public static ResultadoOperacionTarjeta SinPermiso(string motivo) => new(EstadoOperacionTarjeta.SinPermiso, motivo, null);
 
     public static ResultadoOperacionTarjeta DatoInvalido(string mensaje) => new(EstadoOperacionTarjeta.DatoInvalido, mensaje, null);
+
+    public static ResultadoOperacionTarjeta ServicioNoDisponible(string mensaje) =>
+        new(EstadoOperacionTarjeta.ServicioNoDisponible, mensaje, null);
 }
 
 // Datos de una tarjeta en las respuestas de la API. Nunca el número completo. Fechas en UTC.
@@ -37,11 +42,12 @@ public sealed record TarjetaDetalle(int Id, string Titular, string NumeroEnmasca
             tarjeta.Estado.ToString(), tarjeta.FechaEmision);
 }
 
+// Monto siempre está en DOP. MontoOriginal, MonedaOriginal y TasaCambio solo vienen en compras en otra moneda.
 public sealed record TransaccionListado(int Id, decimal Monto, string Comercio, DateTime Fecha, bool Aprobada,
-    string? MotivoDeclinacion)
+    string? MotivoDeclinacion, decimal? MontoOriginal, string? MonedaOriginal, decimal? TasaCambio)
 {
     public static TransaccionListado De(Transaccion t) =>
-        new(t.Id, t.Monto, t.Comercio, t.Fecha, t.Aprobada, t.MotivoDeclinacion);
+        new(t.Id, t.Monto, t.Comercio, t.Fecha, t.Aprobada, t.MotivoDeclinacion, t.MontoOriginal, t.MonedaOriginal, t.TasaCambio);
 }
 
 // Fila del historial de transiciones. EjecutadoPor es "Sistema" o el nombre del agente.
