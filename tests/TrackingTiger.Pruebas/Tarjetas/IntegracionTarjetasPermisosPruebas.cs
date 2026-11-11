@@ -31,7 +31,7 @@ public sealed class IntegracionTarjetasPermisosPruebas : IDisposable
         _contexto.Database.EnsureCreated();
         var reloj = new RelojFijo(Ahora);
         _permisos = new ServicioSolicitudesPermiso(_contexto, reloj);
-        _tarjetas = new ServicioTarjetas(_contexto, reloj, _permisos);
+        _tarjetas = new ServicioTarjetas(_contexto, reloj, _permisos, new TasaCambioFalsa());
     }
 
     public void Dispose()

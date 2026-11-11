@@ -1368,6 +1368,27 @@ Content-Type: application/json
 
 #   Esperado: HTTP 200 {"mensaje":"Transacción aprobada.","tarjeta":{...,"disponible":60.0,"estado":"Activa"},"transaccion":{...,"aprobada":true}}
 
+### Funcionalidad 2 — Compra en otra moneda (usa ExchangeRate-API; exige una clave real en TASA_CAMBIO_API_KEY)
+POST http://localhost:5000/api/tarjetas/1/transacciones
+Authorization: Bearer <token-agente>
+Content-Type: application/json
+
+{"monto": 1, "comercio": "Tienda en línea", "moneda": "USD"}
+
+#   Esperado: HTTP 200 {"mensaje":"Transacción aprobada.",...,"transaccion":{"monto":<valor en DOP>,...,"montoOriginal":1,"monedaOriginal":"USD","tasaCambio":<tasa del día>}}
+#   Sin la variable: HTTP 503 {"mensaje":"La conversión de moneda no está configurada: falta la variable de entorno TASA_CAMBIO_API_KEY. Las compras en DOP siguen funcionando."}
+#   Con una clave falsa o con la API caída: HTTP 503 {"mensaje":"El servicio de tasa de cambio no está disponible. Las compras en DOP siguen funcionando; intenta de nuevo más tarde."}
+#   En ambos 503: no se registra ninguna transacción y el disponible de la tarjeta no cambia.
+
+### Funcionalidad 2 — Moneda no admitida
+POST http://localhost:5000/api/tarjetas/1/transacciones
+Authorization: Bearer <token-agente>
+Content-Type: application/json
+
+{"monto": 1, "comercio": "Tienda en línea", "moneda": "XYZ"}
+
+#   Esperado: HTTP 400 {"mensaje":"moneda debe ser una de estas: DOP, USD, EUR."}
+
 ### Funcionalidad 2 — Ráfaga: enviar esta petición 3 veces
 POST http://localhost:5000/api/tarjetas/1/transacciones
 Authorization: Bearer <token-agente>

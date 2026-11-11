@@ -16,6 +16,11 @@ public sealed class ServicioTarjetas
     public const int MinutosVentanaRafaga = 60;
 
     public const decimal MontoMaximo = 1_000_000m;
+
+    // El crédito de la tarjeta está en pesos; las compras en otra moneda se convierten a esta antes de comparar.
+    public const string MonedaBase = "DOP";
+    private static readonly string[] MonedasAdmitidas = [MonedaBase, "USD", "EUR"];
+
     private const int LargoMaximoTitular = 100;
     private const int LargoMaximoComercio = 200;
     private const int LargoMaximoNota = 500;
@@ -23,12 +28,14 @@ public sealed class ServicioTarjetas
     private readonly ContextoDatos _contexto;
     private readonly IReloj _reloj;
     private readonly ServicioSolicitudesPermiso _permisos;
+    private readonly IProveedorTasaCambio _tasasCambio;
 
-    public ServicioTarjetas(ContextoDatos contexto, IReloj reloj, ServicioSolicitudesPermiso permisos)
+    public ServicioTarjetas(ContextoDatos contexto, IReloj reloj, ServicioSolicitudesPermiso permisos, IProveedorTasaCambio tasasCambio)
     {
         _contexto = contexto;
         _reloj = reloj;
         _permisos = permisos;
+        _tasasCambio = tasasCambio;
     }
 
     // Funcionalidad 1: emitir una tarjeta. Nace Activa y sin consumo.
@@ -52,8 +59,9 @@ public sealed class ServicioTarjetas
     // Funcionalidad 2: registrar una transacción. Se aprueba si la tarjeta está Activa y hay crédito disponible;
     // si no, se declina y queda registrada. Si una tarjeta Activa acumula DeclinacionesParaRafaga declinaciones en
     // MinutosVentanaRafaga minutos, el sistema la pasa a BloqueoSuave. En una tarjeta bloqueada las transacciones
-    // se declinan, pero el estado no cambia por eso.
-    public async Task<ResultadoOperacionTarjeta> RegistrarTransaccionAsync(int tarjetaId, decimal? monto, string? comercio)
+    // se declinan, pero el estado no cambia por eso. Sin moneda, la compra es en DOP; en otra moneda se convierte a
+    // DOP con la tasa del día, y si la tasa no se puede obtener la operación se rechaza sin registrar nada.
+    public async Task<ResultadoOperacionTarjeta> RegistrarTransaccionAsync(int tarjetaId, decimal? monto, string? comercio, string? moneda = null)
     {
         if (monto is null || monto <= 0 || monto > MontoMaximo)
             return ResultadoOperacionTarjeta.DatoInvalido($"monto es obligatorio, mayor que 0 y como máximo {MontoMaximo}.");
@@ -61,9 +69,31 @@ public sealed class ServicioTarjetas
         if (string.IsNullOrWhiteSpace(comercio) || comercio.Trim().Length > LargoMaximoComercio)
             return ResultadoOperacionTarjeta.DatoInvalido($"El comercio es obligatorio y admite como máximo {LargoMaximoComercio} caracteres.");
 
+        var codigoMoneda = string.IsNullOrWhiteSpace(moneda) ? MonedaBase : moneda.Trim().ToUpperInvariant();
+        if (!MonedasAdmitidas.Contains(codigoMoneda))
+            return ResultadoOperacionTarjeta.DatoInvalido($"moneda debe ser una de estas: {string.Join(", ", MonedasAdmitidas)}.");
+
         var tarjeta = await BuscarAsync(tarjetaId);
         if (tarjeta is null)
             return ResultadoOperacionTarjeta.NoEncontrada();
+
+        var montoEnPesos = monto.Value;
+        ConversionMoneda? conversion = null;
+        if (codigoMoneda != MonedaBase)
+        {
+            decimal tasa;
+            try
+            {
+                tasa = await _tasasCambio.ObtenerTasaAsync(codigoMoneda, MonedaBase);
+            }
+            catch (ErrorTasaCambio error)
+            {
+                return ResultadoOperacionTarjeta.ServicioNoDisponible(error.Message);
+            }
+
+            montoEnPesos = Math.Round(monto.Value * tasa, 2, MidpointRounding.AwayFromZero);
+            conversion = new ConversionMoneda(monto.Value, codigoMoneda, tasa);
+        }
 
         var ahora = _reloj.AhoraUtc;
         var nombreComercio = comercio.Trim();
@@ -72,13 +102,13 @@ public sealed class ServicioTarjetas
 
         if (tarjeta.Estado != EstadoTarjeta.Activa)
         {
-            transaccion = Transaccion.Declinar(tarjeta.Id, monto.Value, nombreComercio,
-                $"La tarjeta está en {tarjeta.Estado}.", ahora);
+            transaccion = Transaccion.Declinar(tarjeta.Id, montoEnPesos, nombreComercio,
+                $"La tarjeta está en {tarjeta.Estado}.", ahora, conversion);
             mensaje = $"Transacción declinada: la tarjeta está en {tarjeta.Estado}.";
         }
-        else if (monto > tarjeta.Disponible)
+        else if (montoEnPesos > tarjeta.Disponible)
         {
-            transaccion = Transaccion.Declinar(tarjeta.Id, monto.Value, nombreComercio, "Crédito disponible insuficiente.", ahora);
+            transaccion = Transaccion.Declinar(tarjeta.Id, montoEnPesos, nombreComercio, "Crédito disponible insuficiente.", ahora, conversion);
             mensaje = "Transacción declinada: crédito disponible insuficiente.";
 
             var declinaciones = await ContarDeclinacionesRecientesAsync(tarjeta.Id, ahora) + 1;
@@ -95,8 +125,8 @@ public sealed class ServicioTarjetas
         }
         else
         {
-            tarjeta.RegistrarConsumo(monto.Value);
-            transaccion = Transaccion.Aprobar(tarjeta.Id, monto.Value, nombreComercio, ahora);
+            tarjeta.RegistrarConsumo(montoEnPesos);
+            transaccion = Transaccion.Aprobar(tarjeta.Id, montoEnPesos, nombreComercio, ahora, conversion);
             mensaje = "Transacción aprobada.";
         }
 

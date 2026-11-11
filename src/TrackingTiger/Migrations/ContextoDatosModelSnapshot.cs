@@ -436,7 +436,15 @@ namespace Tracking_Tiger.Migrations
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("MonedaOriginal")
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal>("Monto")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("MontoOriginal")
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
@@ -446,6 +454,10 @@ namespace Tracking_Tiger.Migrations
 
                     b.Property<int>("TarjetaId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("TasaCambio")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
