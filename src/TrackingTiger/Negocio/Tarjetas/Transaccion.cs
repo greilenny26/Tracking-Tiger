@@ -14,18 +14,33 @@ public class Transaccion
     // Por qué se declinó; null si se aprobó.
     public string? MotivoDeclinacion { get; private set; }
 
+    // Solo en compras en otra moneda: lo que se pagó y la tasa aplicada. En esos casos, Monto es el valor en DOP.
+    public decimal? MontoOriginal { get; private set; }
+    public string? MonedaOriginal { get; private set; }
+    public decimal? TasaCambio { get; private set; }
+
     // Solo para EF Core al leer filas.
     private Transaccion()
     {
     }
 
-    public static Transaccion Aprobar(int tarjetaId, decimal monto, string comercio, DateTime ahoraUtc) =>
-        new() { TarjetaId = tarjetaId, Monto = monto, Comercio = comercio, Fecha = ahoraUtc, Aprobada = true };
+    public static Transaccion Aprobar(int tarjetaId, decimal monto, string comercio, DateTime ahoraUtc,
+        ConversionMoneda? conversion = null) =>
+        new()
+        {
+            TarjetaId = tarjetaId, Monto = monto, Comercio = comercio, Fecha = ahoraUtc, Aprobada = true,
+            MontoOriginal = conversion?.MontoOriginal, MonedaOriginal = conversion?.Moneda, TasaCambio = conversion?.Tasa
+        };
 
-    public static Transaccion Declinar(int tarjetaId, decimal monto, string comercio, string motivo, DateTime ahoraUtc) =>
+    public static Transaccion Declinar(int tarjetaId, decimal monto, string comercio, string motivo, DateTime ahoraUtc,
+        ConversionMoneda? conversion = null) =>
         new()
         {
             TarjetaId = tarjetaId, Monto = monto, Comercio = comercio, Fecha = ahoraUtc, Aprobada = false,
-            MotivoDeclinacion = motivo
+            MotivoDeclinacion = motivo,
+            MontoOriginal = conversion?.MontoOriginal, MonedaOriginal = conversion?.Moneda, TasaCambio = conversion?.Tasa
         };
 }
+
+// Cómo se convirtió a DOP una compra hecha en otra moneda.
+public sealed record ConversionMoneda(decimal MontoOriginal, string Moneda, decimal Tasa);
