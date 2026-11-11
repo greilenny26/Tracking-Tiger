@@ -94,6 +94,56 @@ Otro usuario Estándar recibe 403 al descargar o eliminar ese documento, y no lo
 
 **Persistencia:** subir un documento, ejecutar `docker compose down` (sin `-v`) y `docker compose up`: el documento sigue en el listado, se descarga y el usuario inicia sesión.
 
+## API externa
+
+**Qué API:** [ExchangeRate-API](https://www.exchangerate-api.com), que da la tasa de cambio del día y exige una clave.
+
+**Qué operación la usa:** registrar una transacción (`POST /api/tarjetas/{id}/transacciones`). El crédito de la tarjeta está en pesos dominicanos; si la compra viene en `USD` o `EUR`, el monto se convierte a `DOP` con esa tasa y **ese resultado decide si la compra se aprueba o se declina**. Sin el campo `moneda`, la compra es en `DOP` y no se llama a la API.
+
+**Variable de entorno:** `TASA_CAMBIO_API_KEY`, en el archivo `.env`, que no se versiona. Para usar una clave propia: crear una cuenta gratuita en ExchangeRate-API, copiar la clave a `.env` y ejecutar `docker compose up -d` para que la aplicación la tome. La clave no está en el código, en el `Dockerfile`, en el `docker-compose.yml` ni en la imagen, y se envía en la cabecera `Authorization`, de modo que tampoco aparece en los logs.
+
+**Probarla** (con `TOKEN` y una tarjeta con `id` 1):
+
+```
+curl -X POST http://localhost:5000/api/tarjetas/1/transacciones -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" -d "{\"monto\": 10, \"comercio\": \"Tienda en línea\", \"moneda\": \"USD\"}"
+```
+
+Respuesta real (tarjeta con 10 000 DOP de límite): 100 USD a 60.7489 son 6 074.89 DOP, y eso es lo que se descuenta del crédito:
+
+```json
+{"mensaje":"Transacción aprobada.","tarjeta":{"id":1,"titular":"Ana","numeroEnmascarado":"**** 1234","limiteCredito":10000.0,"disponible":3925.11,"estado":"Activa",...},"transaccion":{"id":1,"monto":6074.89,"comercio":"Tienda en linea","aprobada":true,"motivoDeclinacion":null,"montoOriginal":100,"monedaOriginal":"USD","tasaCambio":60.7489}}
+```
+
+Después de gastar casi todo el crédito, otra compra de 100 USD se **declina**: en pesos son 6 074.89, más que los 521.07 disponibles.
+
+**Ejemplo real de respuesta de la API** (`GET https://v6.exchangerate-api.com/v6/latest/USD` con la cabecera `Authorization: Bearer <clave>`, 11 de noviembre de 2026; de las 166 monedas de `conversion_rates` se muestran las 3 que usa el proyecto). La aplicación solo lee `result` y la tasa de `DOP`:
+
+```json
+{
+ "result":"success",
+ "documentation":"https://www.exchangerate-api.com/docs",
+ "terms_of_use":"https://www.exchangerate-api.com/terms",
+ "time_last_update_unix":1794355202,
+ "time_last_update_utc":"Wed, 11 Nov 2026 00:00:02 +0000",
+ "time_next_update_unix":1794441602,
+ "time_next_update_utc":"Thu, 12 Nov 2026 00:00:02 +0000",
+ "base_code":"USD",
+ "conversion_rates":{
+  "USD":1,
+  "DOP":60.7489,
+  "EUR":0.8939
+ }
+}
+```
+
+**Sin clave o con la API caída**, la compra en otra moneda se rechaza con 503 y un mensaje claro, no se registra nada y el crédito no cambia. Todo lo demás, incluidas las compras en `DOP`, sigue funcionando:
+
+| Situación | Respuesta |
+|---|---|
+| Falta `TASA_CAMBIO_API_KEY` | 503 `La conversión de moneda no está configurada: falta la variable de entorno TASA_CAMBIO_API_KEY. Las compras en DOP siguen funcionando.` |
+| Clave no válida, cuota agotada o API caída | 503 `El servicio de tasa de cambio no está disponible. Las compras en DOP siguen funcionando; intenta de nuevo más tarde.` |
+| Moneda distinta de `DOP`, `USD`, `EUR` | 400 `moneda debe ser una de estas: DOP, USD, EUR.` |
+
 ## Variables de entorno
 
 Las credenciales **nunca** están en el repositorio (RD-10): se leen de variables de entorno. `.env.example` lista todas con un valor de ejemplo; los valores reales van en un archivo local que está ignorado por Git: `.env` con Docker (ver «Contenedor»), o `.env.cmd` para ejecutar sin Docker, como se explica a continuación.
@@ -110,6 +160,8 @@ Las credenciales **nunca** están en el repositorio (RD-10): se leen de variable
 | `ADMIN_CLAVE_INICIAL` | Contraseña del primer Administrador (mínimo 8 caracteres, con letras y números). | Para `crear-admin` |
 | `DB_RUTA` | Ruta del archivo de la base de datos SQLite. Vacío → `src\TrackingTiger\trackingtiger.db`. | No |
 | `SEAWEEDFS_URL` | URL del Filer de SeaweedFS, donde se guardan los archivos de los documentos. | Para subir y descargar documentos |
+| `TASA_CAMBIO_API_KEY` | Clave de ExchangeRate-API (ver «API externa»). | Para compras en `USD` o `EUR` |
+
 Crear `.env.cmd` en la raíz del proyecto (formato CMD, sin espacios alrededor del `=`):
 
 ```
@@ -178,7 +230,7 @@ Quién puede ejecutar cada operación está declarado en un solo lugar: `src/Tra
 | `POST /api/permisos/solicitudes/{id}/aprobar` | Administrador | `{"minutosVigencia"}` (1 a 43200) |
 | `POST /api/permisos/solicitudes/{id}/rechazar` | Administrador | `{"motivo"}` |
 | `POST /api/tarjetas` | Con sesión | `{"titular","ultimosCuatro","limiteCredito"}` |
-| `POST /api/tarjetas/{id}/transacciones` | Con sesión | `{"monto","comercio"}` |
+| `POST /api/tarjetas/{id}/transacciones` | Con sesión | `{"monto","comercio","moneda"}` (`moneda` es opcional: `DOP` por defecto, o `USD`, `EUR`) |
 | `GET /api/tarjetas/{id}` | Con sesión | — |
 | `POST /api/tarjetas/{id}/reconocer` | Estándar | — |
 | `POST /api/tarjetas/{id}/no-reconocer` | Estándar | `{"nota"}` |
