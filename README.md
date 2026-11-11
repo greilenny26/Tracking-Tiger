@@ -192,6 +192,18 @@ Quién puede ejecutar cada operación está declarado en un solo lugar: `src/Tra
 
 Pasos en el orden de la revisión. Las peticiones exactas y los resultados esperados están en `docs/pruebas.http` (sección indicada entre paréntesis).
 
+**Con Docker** (ver «Contenedor»), cada paso de abajo que pide una terminal CMD se hace así, desde la carpeta del proyecto y con la composición levantada:
+
+| Donde el paso dice… | Con Docker |
+|---|---|
+| `call .env.cmd` y `dotnet run --project src/TrackingTiger` | Nada: la API ya corre en `http://localhost:5000` |
+| `dotnet run --project src/TrackingTiger -- crear-admin` (primer Administrador) | Nada: se crea solo al arrancar con `admin@ejemplo.test` / `CambiaEsta123`. Donde los pasos usan `admin@ejemplo.com` / `Clave12345`, usar estos |
+| `set ADMIN_CORREO_INICIAL=agente@ejemplo.com` y `crear-admin` (segundo usuario) | `docker compose exec -e ADMIN_CORREO_INICIAL=agente@ejemplo.com -e ADMIN_CLAVE_INICIAL=Clave12345 app dotnet TrackingTiger.dll crear-admin` (cambiar el correo por `ana@ejemplo.com` en «Gestión de permisos») |
+| `set DB_RUTA=...` (base limpia) | `docker compose down -v` y `docker compose up -d`: borra los datos y empieza de cero |
+| `dotnet run --project src/TrackingTiger -- enviar-correos` | Esperar unos 15 segundos y ejecutar `docker compose logs correo`: ahí salen el enlace y el código |
+| Detener la API (`Ctrl+C`) y volver a ejecutarla | `docker compose down` (sin `-v`) y `docker compose up -d` |
+| Abrir la base en DB Browser | `docker compose cp app:/datos/trackingtiger.db .` copia el archivo a la carpeta actual para abrirlo |
+
 ### Preparación
 
 1. Terminal A (CMD): `call .env.cmd` y `dotnet run --project src/TrackingTiger`.
