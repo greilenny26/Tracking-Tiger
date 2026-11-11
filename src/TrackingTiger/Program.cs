@@ -49,6 +49,9 @@ builder.Services.AddScoped<ServicioDocumentos>();
 // RF-DOC-05: el contenido de los documentos vive en SeaweedFS (SEAWEEDFS_URL), no en la base ni en la imagen.
 builder.Services.AddHttpClient<IAlmacenDocumentos, AlmacenSeaweedFs>(cliente => cliente.Timeout = AlmacenSeaweedFs.TiempoMaximo);
 
+// Tasa de cambio para las compras en otra moneda: la clave viene de TASA_CAMBIO_API_KEY (RD-10).
+builder.Services.AddHttpClient<IProveedorTasaCambio, ProveedorTasaExchangeRate>(cliente => cliente.Timeout = ProveedorTasaExchangeRate.TiempoMaximo);
+
 // Esquema de autenticación por defecto (RF-CA-07): valida la credencial de sesión; lo usa
 // FiltroAutorizacionOperaciones para las operaciones que exigen sesión o rol.
 builder.Services.AddAuthentication(ManejadorAutenticacionSesion.Esquema)
