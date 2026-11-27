@@ -2,6 +2,8 @@ using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.ControlAcceso;
+using Tracking_Tiger.Core.Correo;
+using Tracking_Tiger.Core.Notificaciones;
 using Tracking_Tiger.Core.Persistencia;
 
 namespace Tracking_Tiger.Core.Permisos;
@@ -16,10 +18,14 @@ public sealed class ServicioSolicitudesPermiso
     private readonly ContextoDatos _contexto;
     private readonly IReloj _reloj;
 
-    public ServicioSolicitudesPermiso(ContextoDatos contexto, IReloj reloj)
+    private readonly ServicioNotificaciones _notificaciones;
+
+    // Sin notificaciones explícitas (pruebas) se arman sobre el mismo contexto y reloj.
+    public ServicioSolicitudesPermiso(ContextoDatos contexto, IReloj reloj, ServicioNotificaciones? notificaciones = null)
     {
         _contexto = contexto;
         _reloj = reloj;
+        _notificaciones = notificaciones ?? new ServicioNotificaciones(contexto, reloj, new ColaCorreo(contexto, reloj));
     }
 
     // RF-GP-01: crea la solicitud en Pendiente. Solo se pueden pedir las operaciones declaradas en
@@ -51,6 +57,13 @@ public sealed class ServicioSolicitudesPermiso
 
         var solicitud = SolicitudPermiso.Crear(solicitanteId, permiso, _reloj.AhoraUtc);
         _contexto.SolicitudesPermiso.Add(solicitud);
+
+        // RF-NOT-01: el aviso a los Administradores se guarda junto con la solicitud.
+        var nombre = await _contexto.Usuarios.Where(u => u.Id == solicitanteId).Select(u => u.Nombre).SingleAsync();
+        await _notificaciones.AgregarParaAdministradoresAsync("solicitud-creada",
+            "Nueva solicitud de permiso",
+            $"{nombre} solicitó el permiso {permiso}. Está pendiente de resolución.");
+
         await _contexto.SaveChangesAsync();
 
         var listado = (await ListarAsync(s => s.Id == solicitud.Id)).Single();
@@ -87,6 +100,12 @@ public sealed class ServicioSolicitudesPermiso
         if (!aplicacion.Exito)
             return ResultadoResolucionSolicitud.NoPermitida(aplicacion.Mensaje);
 
+        // RF-NOT-02: se avisa al solicitante en el mismo guardado de la resolución.
+        await _notificaciones.AgregarAsync([solicitud.SolicitanteId], "solicitud-aprobada",
+            "Tu solicitud de permiso fue aprobada",
+            $"Tu solicitud del permiso {solicitud.PermisoSolicitado} fue aprobada. " +
+            $"Vigencia: {minutosVigencia.Value} minutos.");
+
         await _contexto.SaveChangesAsync();
         return ResultadoResolucionSolicitud.Resuelta((await ListarAsync(s => s.Id == solicitudId)).Single());
     }
@@ -109,6 +128,11 @@ public sealed class ServicioSolicitudesPermiso
             solicitud, EstadoSolicitud.Rechazada, administradorId, _reloj.AhoraUtc, motivo);
         if (!transicion.Exito)
             return ResultadoResolucionSolicitud.NoPermitida(transicion.Mensaje);
+
+        // RF-NOT-02: en un rechazo se incluye el motivo.
+        await _notificaciones.AgregarAsync([solicitud.SolicitanteId], "solicitud-rechazada",
+            "Tu solicitud de permiso fue rechazada",
+            $"Tu solicitud del permiso {solicitud.PermisoSolicitado} fue rechazada. Motivo: {solicitud.MotivoRechazo}");
 
         await _contexto.SaveChangesAsync();
         return ResultadoResolucionSolicitud.Resuelta((await ListarAsync(s => s.Id == solicitudId)).Single());

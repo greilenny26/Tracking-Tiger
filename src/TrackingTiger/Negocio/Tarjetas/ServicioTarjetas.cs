@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.ControlAcceso;
+using Tracking_Tiger.Core.Correo;
+using Tracking_Tiger.Core.Notificaciones;
 using Tracking_Tiger.Core.Permisos;
 using Tracking_Tiger.Core.Persistencia;
 
@@ -14,6 +16,9 @@ public sealed class ServicioTarjetas
     // Regla de ráfaga: estas declinaciones dentro de la ventana disparan el Bloqueo Suave.
     public const int DeclinacionesParaRafaga = 3;
     public const int MinutosVentanaRafaga = 60;
+
+    // RF-NOT-03: el Bloqueo Suave se avisa a los agentes que actuaron sobre la tarjeta en estas horas.
+    public const int HorasAvisoAgentes = 48;
 
     public const decimal MontoMaximo = 1_000_000m;
 
@@ -30,8 +35,12 @@ public sealed class ServicioTarjetas
     private readonly ServicioSolicitudesPermiso _permisos;
     private readonly IProveedorTasaCambio _tasasCambio;
 
-    public ServicioTarjetas(ContextoDatos contexto, IReloj reloj, ServicioSolicitudesPermiso permisos, IProveedorTasaCambio tasasCambio)
+    private readonly ServicioNotificaciones _notificaciones;
+
+    public ServicioTarjetas(ContextoDatos contexto, IReloj reloj, ServicioSolicitudesPermiso permisos, IProveedorTasaCambio tasasCambio,
+        ServicioNotificaciones? notificaciones = null)
     {
+        _notificaciones = notificaciones ?? new ServicioNotificaciones(contexto, reloj, new ColaCorreo(contexto, reloj));
         _contexto = contexto;
         _reloj = reloj;
         _permisos = permisos;
@@ -119,6 +128,7 @@ public sealed class ServicioTarjetas
                 if (bloqueo.Exito)
                 {
                     _contexto.Set<HistorialEstadoTarjeta>().Add(bloqueo.Historial!);
+                    await AvisarBloqueoSuaveAsync(tarjeta, ahora);
                     mensaje += " La tarjeta pasó a BloqueoSuave por una ráfaga de declinaciones.";
                 }
             }
@@ -214,6 +224,24 @@ public sealed class ServicioTarjetas
         _contexto.Set<HistorialEstadoTarjeta>().Add(resultado.Historial!);
         await _contexto.SaveChangesAsync();
         return ResultadoOperacionTarjeta.Exito(resultado.Mensaje, TarjetaDetalle.De(tarjeta));
+    }
+
+    // RF-NOT-03, RF-NEG-07: evento del negocio. Reciben el aviso los agentes activos que ejecutaron alguna
+    // acción sobre esta tarjeta en las últimas HorasAvisoAgentes horas; si no hubo ninguno, no se avisa a nadie.
+    private async Task AvisarBloqueoSuaveAsync(Tarjeta tarjeta, DateTime ahoraUtc)
+    {
+        var desde = ahoraUtc.AddHours(-HorasAvisoAgentes);
+        var agentes = await _contexto.Usuarios
+            .Where(u => u.Rol == Rol.Estandar && u.Activo
+                && _contexto.Set<HistorialEstadoTarjeta>()
+                    .Any(h => h.TarjetaId == tarjeta.Id && h.UsuarioId == u.Id && h.Fecha >= desde))
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        await _notificaciones.AgregarAsync(agentes, "tarjeta-bloqueo-suave",
+            "Tarjeta en Bloqueo Suave",
+            $"La tarjeta {tarjeta.Id} ({tarjeta.NumeroEnmascarado}) pasó a BloqueoSuave por una ráfaga de " +
+            "declinaciones. Trabajaste con ella en los últimos 2 días: contacta al cliente.");
     }
 
     private Task<Tarjeta?> BuscarAsync(int tarjetaId) =>

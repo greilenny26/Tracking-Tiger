@@ -39,6 +39,9 @@ public class Usuario
     // Fin del bloqueo temporal por intentos fallidos (RF-CA-19), en UTC. Null = sin bloqueo.
     public DateTime? BloqueadoHasta { get; private set; }
 
+    // RF-NOT-07: true si además de la notificación interna quiere recibir el correo.
+    public bool NotificacionesPorCorreo { get; private set; } = true;
+
     public DateTime FechaCreacion { get; set; }
 
     // Solo para EF Core al leer filas. Todo usuario nuevo se crea con CrearNuevo.
@@ -71,6 +74,9 @@ public class Usuario
     // Cambio de rol (RF-CA-08): solo lo invoca ServicioAdministracionUsuarios, en una operación
     // que el catálogo reserva al Administrador.
     public void CambiarRol(Rol nuevoRol) => Rol = nuevoRol;
+
+    // RF-NOT-07: activa o desactiva el canal de correo de sus notificaciones.
+    public void CambiarNotificacionesPorCorreo(bool activado) => NotificacionesPorCorreo = activado;
 
     // Regla de dominio (RF-CA-15): un usuario nuevo SIEMPRE nace inactivo.
     // RF-CA-04: un usuario nuevo SIEMPRE nace Estándar; el rol nunca se toma de la petición.
