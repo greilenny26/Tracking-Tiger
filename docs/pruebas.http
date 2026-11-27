@@ -1555,3 +1555,47 @@ Authorization: Bearer <token-ana>
 #            GET /api/documentos/1/descargar → 404,
 #            pero en la tabla Documentos la fila sigue con Eliminado = 1 y FechaEliminacion en UTC,
 #            y el archivo sigue en SeaweedFS (carpeta /documentos/).
+
+### =============== Notificaciones, cola de correos y reportes ===============
+#   Preparación y eventos: sección «Notificaciones» del README. Reemplazar <token-admin> y <token-agente>.
+
+### RF-NOT-04 — Consultar las propias
+GET http://localhost:5000/api/notificaciones?leida=false
+Authorization: Bearer <token-admin>
+
+#   Esperado: HTTP 200 solo con las notificaciones sin leer de ese usuario. Sin token → 401.
+
+### RF-NOT-05 — Marcar como leída
+POST http://localhost:5000/api/notificaciones/1/leer
+Authorization: Bearer <token-agente>
+
+#   Con una notificación de otro usuario → 403 y sigue sin leer. Del destinatario → 200. Id inexistente → 404.
+
+### RF-NOT-07 — Desactivar el canal de correo
+PUT http://localhost:5000/api/notificaciones/preferencias
+Authorization: Bearer <token-admin>
+Content-Type: application/json
+
+{"correo": false}
+
+#   Esperado: HTTP 200. La siguiente notificación aparece en la bandeja y no se encola correo para ese usuario.
+
+### RF-NOT-11 — Consultar la cola
+GET http://localhost:5000/api/correos?estado=Fallido
+Authorization: Bearer <token-admin>
+
+#   Esperado: HTTP 200 con intentos, fechas y ultimoError, sin el cuerpo. Con <token-agente> → 403.
+#   ?estado=Otro → 400.
+
+### RF-REP-01 — Solicitudes por día y estado
+GET http://localhost:5000/api/reportes/solicitudes-permiso?desde=2026-11-01&hasta=2026-11-30
+Authorization: Bearer <token-admin>
+
+#   Esperado: HTTP 200 [{"periodo","estado","total"}]. Con <token-agente>, solo sus solicitudes.
+#   desde posterior a hasta, o fecha mal escrita → 400.
+
+### RF-REP-02 — Declinaciones por comercio
+GET http://localhost:5000/api/reportes/tarjetas/riesgo-por-comercio?desde=2026-11-01&hasta=2026-11-30
+Authorization: Bearer <token-admin>
+
+#   Esperado: HTTP 200, una fila por comercio ordenada por montoDeclinado. Con <token-agente> → 403.

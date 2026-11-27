@@ -2,7 +2,7 @@
 
 Sistema antifraude para tarjetas de débito y crédito. API web en ASP.NET Core (.NET 10) con EF Core + SQLite.
 
-- **Core** (`src/TrackingTiger/Core/`): Control de acceso (registro, activación por correo, sesión, roles, administración de usuarios, recuperación de contraseña) y la cola mínima de correos.
+- **Core** (`src/TrackingTiger/Core/`): Control de acceso (registro, activación por correo, sesión, roles, administración de usuarios, recuperación de contraseña), Gestión de permisos, Documentos, Notificaciones, la cola de correos y Reportes.
 - **Negocio** (`src/TrackingTiger/Negocio/Tarjetas/`): tarjetas de crédito vigiladas por el sistema antifraude, con su máquina de estados Activa / BloqueoSuave / BloqueoTotal / Cancelada (ver `docs/maquina-de-estados.md`). El Core no depende del Negocio (RD-03).
 
 Todos los casos de prueba manuales, con la petición y el resultado esperado, están en **`docs/pruebas.http`** (se ejecuta con la extensión REST Client de VS Code o copiando las peticiones a cualquier cliente HTTP).
@@ -19,7 +19,7 @@ Todos los casos de prueba manuales, con la petición y el resultado esperado, es
 ```
 git clone https://github.com/greilenny26/Tracking-Tiger.git
 cd Tracking-Tiger
-git checkout practica-4
+git checkout practica-5
 ```
 
 ## Contenedor
@@ -93,6 +93,116 @@ curl -X DELETE -H "Authorization: Bearer TOKEN" http://localhost:5000/api/docume
 Otro usuario Estándar recibe 403 al descargar o eliminar ese documento, y no lo ve en su listado. El Administrador ve, descarga y elimina los de todos. La eliminación es lógica: la fila sigue en la tabla `Documentos` con `Eliminado = 1`. Casos completos en `docs/pruebas.http`.
 
 **Persistencia:** subir un documento, ejecutar `docker compose down` (sin `-v`) y `docker compose up`: el documento sigue en el listado, se descarga y el usuario inicia sesión.
+
+## Notificaciones
+
+Cada notificación llega por dos canales (RF-NOT-06): la bandeja dentro del sistema y un correo que se **encola** (nunca se envía dentro de la operación). Con el proyecto en contenedores y el `.env.example` sin cambios, el correo se ve con `docker compose logs correo`.
+
+### Preparar los usuarios
+
+Los comandos `curl` de estas secciones están escritos para Git Bash, Linux o macOS. En PowerShell usar `docs/pruebas.http` o cualquier cliente HTTP.
+
+1. Administrador: `admin@ejemplo.test` / `CambiaEsta123` (se crea solo).
+2. Segundo usuario, que será el Estándar (agente):
+
+```
+docker compose exec -e ADMIN_CORREO_INICIAL=agente@ejemplo.test -e ADMIN_CLAVE_INICIAL=Clave12345 app dotnet TrackingTiger.dll crear-admin
+```
+
+3. Iniciar sesión con cada uno (`POST /api/auth/login`) y guardar los tokens como `ADMIN` y `AGENTE`:
+
+```
+curl -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"correo":"admin@ejemplo.test","contrasena":"CambiaEsta123"}'
+curl -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" -d '{"correo":"agente@ejemplo.test","contrasena":"Clave12345"}'
+```
+
+4. Convertir al segundo en Estándar (con una base limpia su id es 2; se comprueba con `GET /api/usuarios`):
+
+```
+curl -X PUT http://localhost:5000/api/usuarios/2/rol -H "Authorization: Bearer ADMIN" -H "Content-Type: application/json" -d '{"rol":"Estandar"}'
+```
+
+### Cómo provocar cada evento
+
+| Evento | Cómo provocarlo | Quién la recibe |
+|---|---|---|
+| Solicitud de permiso creada (RF-NOT-01) | El agente: `POST /api/permisos/solicitudes` `{"permiso":"listar-usuarios"}` | Los Administradores activos |
+| Solicitud aprobada (RF-NOT-02) | El Administrador: `POST /api/permisos/solicitudes/{id}/aprobar` `{"minutosVigencia":30}` | El solicitante |
+| Solicitud rechazada (RF-NOT-02) | El Administrador: `POST /api/permisos/solicitudes/{id}/rechazar` `{"motivo":"No lo necesitas."}` | El solicitante, con el motivo |
+| Tarjeta en Bloqueo Suave (RF-NOT-03) | Ver abajo | Los agentes que trabajaron con esa tarjeta en las últimas 48 horas |
+
+**Evento del negocio (RF-NOT-03):** cuando una ráfaga de declinaciones pone una tarjeta en BloqueoSuave, reciben el aviso los agentes (usuarios Estándar activos) que ejecutaron alguna acción sobre **esa** tarjeta (reconocer, no reconocer, levantar el bloqueo o cancelar) en los últimos 2 días. Registrar transacciones no cuenta, porque simulan la red de pago. Si nadie trabajó con ella, no se avisa a nadie. Para provocarlo:
+
+1. El agente emite una tarjeta: `POST /api/tarjetas` `{"titular":"Ana Pérez","ultimosCuatro":"4321","limiteCredito":100}` (anotar su `id`).
+2. Registrar **tres veces** `POST /api/tarjetas/{id}/transacciones` `{"monto":500,"comercio":"Tienda en linea"}`: pasa a BloqueoSuave. Esta primera vez no avisa a nadie.
+3. El agente trabaja con la tarjeta: `POST /api/tarjetas/{id}/reconocer`: vuelve a Activa.
+4. Repetir las **tres** transacciones del paso 2: el agente recibe la notificación (`GET /api/notificaciones`).
+
+### Consultar, marcar y desactivar el correo (RF-NOT-04, 05, 07)
+
+```
+curl -H "Authorization: Bearer ADMIN" http://localhost:5000/api/notificaciones
+curl -H "Authorization: Bearer ADMIN" "http://localhost:5000/api/notificaciones?leida=false"
+curl -X POST -H "Authorization: Bearer ADMIN" http://localhost:5000/api/notificaciones/1/leer
+curl -X PUT http://localhost:5000/api/notificaciones/preferencias -H "Authorization: Bearer ADMIN" -H "Content-Type: application/json" -d '{"correo": false}'
+```
+
+Marcar la notificación de otro usuario responde **403**. Con `{"correo": false}` las notificaciones siguen apareciendo en la bandeja y no se encola ningún correo para ese usuario; se vuelve a activar con `{"correo": true}`.
+
+### Cola de correos
+
+- **Máximo de intentos: 3.** Un correo que falla queda `Pendiente` hasta el tercer intento y entonces pasa a `Fallido`, con su último error. Un correo `Fallido` o `Enviado` no se vuelve a intentar.
+- **Consulta (solo Administrador):** `GET /api/correos`, o filtrada con `?estado=Pendiente`, `Enviado` o `Fallido`. Un Estándar recibe **403**. No muestra el cuerpo de los correos.
+
+```
+curl -H "Authorization: Bearer ADMIN" http://localhost:5000/api/correos
+curl -H "Authorization: Bearer ADMIN" "http://localhost:5000/api/correos?estado=Fallido"
+```
+
+**Ejecutar el procesador:** el servicio `correo` lo ejecuta solo cada 15 segundos. A mano:
+
+```
+docker compose exec correo dotnet TrackingTiger.dll enviar-correos
+```
+
+Ejecutarlo dos veces seguidas no duplica envíos: la segunda responde «No hay correos pendientes.» Si coincide con la ejecución automática responde «Ya hay otro envío de correos en curso.» y basta repetirlo. Sin Docker: `dotnet run --project src/TrackingTiger -- enviar-correos`.
+
+**Provocar un fallo de envío** (sin editar `.env`):
+
+1. Detener el envío automático: `docker compose stop correo`.
+2. Generar un correo, por ejemplo creando una solicitud de permiso.
+3. Ejecutar **tres veces** el procesador apuntando a un servidor apagado:
+
+```
+docker compose run --rm -e SMTP_HOST=localhost -e SMTP_PORT=2599 --entrypoint dotnet correo TrackingTiger.dll enviar-correos
+```
+
+4. `GET /api/correos` muestra `intentos` 1, 2 y 3, y después del tercero `"estado":"Fallido"` con `ultimoError`. La solicitud del paso 2 se creó bien aunque el servidor no respondiera (RF-NOT-08).
+5. Volver a encender el envío: `docker compose start correo`. El correo fallido no se reintenta.
+
+## Reportes
+
+Ambos aceptan `desde` y `hasta` (opcionales, formato `aaaa-mm-dd`, en UTC, los dos días incluidos). Una fecha mal escrita o `desde` posterior a `hasta` responde **400**. Cambiar las fechas de los ejemplos por las del día de la prueba.
+
+### Core: solicitudes de permiso por día y estado (RF-REP-01)
+
+```
+curl -H "Authorization: Bearer ADMIN" "http://localhost:5000/api/reportes/solicitudes-permiso?desde=2026-11-01&hasta=2026-11-30"
+```
+
+Devuelve una fila por día y estado: `[{"periodo":"2026-11-26","estado":"Pendiente","total":3}]`. El Administrador ve el total de todos; un Estándar, con la misma petición y su token, **solo cuenta las suyas** (RF-REP-04).
+
+### Negocio: declinaciones por comercio (RF-REP-02)
+
+**Pregunta que responde:** ¿en qué comercios se concentran las compras declinadas y cuánto dinero representan? Sirve para decidir qué comercios revisar por posible fraude.
+
+```
+curl -H "Authorization: Bearer ADMIN" "http://localhost:5000/api/reportes/tarjetas/riesgo-por-comercio?desde=2026-11-01&hasta=2026-11-30"
+```
+
+Devuelve una fila por comercio con `transacciones`, `declinadas`, `porcentajeDeclinacion`, `montoDeclinado` y `montoAprobado` (en DOP), del mayor monto declinado al menor. Resume las transacciones de todas las tarjetas, así que es **solo del Administrador**: un Estándar recibe **403**.
+
+**Comprobar el filtro:** pedir cada reporte con el día de hoy (`desde` = `hasta` = hoy) y con un rango anterior, por ejemplo `desde=2026-01-01&hasta=2026-01-31`: el primero trae los datos y el segundo devuelve `[]`.
 
 ## API externa
 
@@ -237,6 +347,13 @@ Quién puede ejecutar cada operación está declarado en un solo lugar: `src/Tra
 | `POST /api/tarjetas/{id}/levantar-bloqueo-total` | Estándar + permiso `levantar-bloqueo-total` | `{"nota"}` |
 | `POST /api/tarjetas/{id}/cancelar` | Estándar | `{"nota"}` |
 | `GET /api/tarjetas/{id}/historial` | Administrador | — |
+| `GET /api/notificaciones?leida=` | Con sesión (solo las propias) | — |
+| `POST /api/notificaciones/{id}/leer` | Con sesión (solo las propias) | — |
+| `GET /api/notificaciones/preferencias` | Con sesión | — |
+| `PUT /api/notificaciones/preferencias` | Con sesión | `{"correo"}` (`true` o `false`) |
+| `GET /api/correos?estado=` | Administrador | — |
+| `GET /api/reportes/solicitudes-permiso?desde=&hasta=` | Con sesión (un Estándar, solo las suyas) | — |
+| `GET /api/reportes/tarjetas/riesgo-por-comercio?desde=&hasta=` | Administrador | — |
 
 `GET /api/usuarios` también lo puede ejecutar un usuario Estándar con un permiso `listar-usuarios` aprobado y vigente (RF-GP-05).
 
@@ -450,7 +567,11 @@ TrackingTiger.sln         Solución: agrupa la aplicación y sus pruebas (dotnet
 src/TrackingTiger/        La aplicación
   Core/                   Control de acceso, correo, persistencia y web (no depende de Negocio)
     ControlAcceso/        Usuarios, sesiones, roles, catálogo de operaciones, recuperación
-    Correo/               Cola de correos y enviador SMTP
+    Correo/               Cola de correos, procesador, consulta y enviador SMTP
+    Notificaciones/       Bandeja interna y canal de correo
+    Reportes/             Reporte de solicitudes y rango de fechas
+    Permisos/             Gestión de permisos
+    Documentos/           Manejador de documentos
     Persistencia/         ContextoDatos (EF Core + SQLite)
     Web/                  Manejo global de errores (RD-08)
   Negocio/Tarjetas/       Tarjeta, transacciones, historial, su máquina de estados, servicio y endpoints
