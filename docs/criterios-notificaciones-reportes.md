@@ -6,6 +6,9 @@ Escritos antes de delegar. El trabajo del agente se acepta solo si cada criterio
 
 - **Administrador activo:** usuario con rol Administrador y cuenta activa.
 - **Agente de fraude activo:** usuario con rol Estándar y cuenta activa.
+- **Agente que trabajó con una tarjeta:** agente de fraude activo que ejecutó una acción sobre ella (queda en su
+  historial: reconocer, no reconocer, levantar el bloqueo, cancelar) en las últimas 48 horas, límite incluido.
+  Registrar transacciones no cuenta: simulan la red de pago.
 - **Operaciones nuevas** (todas exigen sesión; sin ella responden 401):
 
 | Operación | Quién |
@@ -30,8 +33,11 @@ Escritos antes de delegar. El trabajo del agente se acepta solo si cada criterio
 | N-03 | RF-NOT-02 | Una solicitud Pendiente | un Administrador la aprueba | solo el solicitante recibe una notificación nueva cuyo mensaje dice que fue aprobada |
 | N-04 | RF-NOT-02 | Una solicitud Pendiente | un Administrador la rechaza con un motivo | solo el solicitante recibe una notificación nueva cuyo mensaje dice que fue rechazada e incluye ese motivo |
 | N-05 | RF-NOT-02 | Una solicitud ya resuelta | se intenta resolver otra vez | se rechaza y no se crea ninguna notificación |
-| N-06 | RF-NOT-03 | Una tarjeta Activa, un agente de fraude activo y un Administrador | la tercera declinación en 60 minutos la pasa a BloqueoSuave | cada agente de fraude activo recibe una notificación con el id de la tarjeta y sus últimos 4 dígitos; el Administrador no |
+| N-06 | RF-NOT-03 | Un agente que reconoció la actividad de una tarjeta hace menos de 48 horas, otro que nunca actuó sobre ella y un Administrador | la tercera declinación en 60 minutos la pasa a BloqueoSuave | solo el primer agente recibe una notificación, con el id de la tarjeta y sus últimos 4 dígitos |
 | N-07 | RF-NOT-03 | La misma tarjeta ya en BloqueoSuave | se registra otra transacción | no se crea otra notificación |
+| N-07a | RF-NOT-03 | Un agente cuya última acción sobre la tarjeta fue hace más de 48 horas | la tarjeta pasa a BloqueoSuave | ese agente no recibe notificación |
+| N-07b | RF-NOT-03 | Una tarjeta sobre la que ningún agente actuó en las últimas 48 horas | pasa a BloqueoSuave | el cambio de estado se completa y no se crea ninguna notificación ni correo |
+| N-07c | RF-NOT-03 | Un agente que actuó varias veces sobre la tarjeta en las últimas 48 horas | la tarjeta pasa a BloqueoSuave | recibe una sola notificación |
 | N-08 | RF-NOT-04 | Un usuario con una notificación leída y otra sin leer | consulta `GET /api/notificaciones` | ve ambas, cada una con `leida` correcto; con `?leida=false` ve solo la no leída |
 | N-09 | RF-NOT-04 | Dos usuarios con notificaciones | uno consulta las suyas | no aparece ninguna del otro, aunque sea Administrador |
 | N-10 | RF-NOT-05 | Una notificación propia sin leer | su destinatario la marca | responde 200 y queda leída; marcarla otra vez responde 200 y sigue leída |
