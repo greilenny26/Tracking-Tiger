@@ -161,6 +161,11 @@ namespace Tracking_Tiger.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("NotificacionesPorCorreo")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("Rol")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -262,6 +267,38 @@ namespace Tracking_Tiger.Migrations
                     b.HasIndex("UsuarioId");
 
                     b.ToTable("Documentos", (string)null);
+                });
+
+            modelBuilder.Entity("Tracking_Tiger.Core.Notificaciones.Notificacion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DestinatarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Leida")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Mensaje")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DestinatarioId");
+
+                    b.ToTable("Notificaciones", (string)null);
                 });
 
             modelBuilder.Entity("Tracking_Tiger.Core.Permisos.PermisoOtorgado", b =>
@@ -504,6 +541,15 @@ namespace Tracking_Tiger.Migrations
                     b.HasOne("Tracking_Tiger.Core.ControlAcceso.Usuario", null)
                         .WithMany()
                         .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Tracking_Tiger.Core.Notificaciones.Notificacion", b =>
+                {
+                    b.HasOne("Tracking_Tiger.Core.ControlAcceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("DestinatarioId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

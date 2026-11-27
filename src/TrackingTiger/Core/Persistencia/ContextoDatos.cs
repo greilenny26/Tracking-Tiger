@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
 using Tracking_Tiger.Core.Documentos;
+using Tracking_Tiger.Core.Notificaciones;
 using Tracking_Tiger.Core.Permisos;
 
 namespace Tracking_Tiger.Core.Persistencia;
@@ -22,6 +23,7 @@ public class ContextoDatos : DbContext
     public DbSet<SolicitudPermiso> SolicitudesPermiso => Set<SolicitudPermiso>();
     public DbSet<PermisoOtorgado> PermisosOtorgados => Set<PermisoOtorgado>();
     public DbSet<Documento> Documentos => Set<Documento>();
+    public DbSet<Notificacion> Notificaciones => Set<Notificacion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -158,5 +160,22 @@ public class ContextoDatos : DbContext
             // Restrict: el documento es historial de quien lo subió; borrar el usuario no debe borrarlo en silencio.
             documento.HasOne<Usuario>().WithMany().HasForeignKey(d => d.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
+
+        modelBuilder.Entity<Notificacion>(notificacion =>
+        {
+            notificacion.ToTable("Notificaciones");
+            notificacion.HasKey(n => n.Id);
+            notificacion.Property(n => n.Tipo).IsRequired().HasMaxLength(Notificacion.LargoMaximoTipo);
+            notificacion.Property(n => n.Mensaje).IsRequired().HasMaxLength(Notificacion.LargoMaximoMensaje);
+            notificacion.Property(n => n.Leida).IsRequired();
+            notificacion.Property(n => n.Fecha).IsRequired();
+            // RF-NOT-04: cada usuario consulta las suyas.
+            notificacion.HasIndex(n => n.DestinatarioId);
+            // Restrict: borrar el usuario no debe borrar su historial en silencio.
+            notificacion.HasOne<Usuario>().WithMany().HasForeignKey(n => n.DestinatarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // RF-NOT-07: los usuarios que ya existían quedan con el correo activado.
+        modelBuilder.Entity<Usuario>().Property(u => u.NotificacionesPorCorreo).IsRequired().HasDefaultValue(true);
     }
 }
