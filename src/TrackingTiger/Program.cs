@@ -4,6 +4,8 @@ using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
 using Tracking_Tiger.Core.Documentos;
+using Tracking_Tiger.Core.Notificaciones;
+using Tracking_Tiger.Core.Reportes;
 using Tracking_Tiger.Core.Persistencia;
 using Tracking_Tiger.Core.Web;
 using Tracking_Tiger.Core.Permisos;
@@ -61,6 +63,10 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IColaCorreo, ColaCorreo>();
 builder.Services.AddSingleton<IEnviadorCorreo, EnviadorSmtp>();
 builder.Services.AddScoped<ProcesadorColaCorreo>();
+builder.Services.AddScoped<ServicioConsultaCorreos>();
+builder.Services.AddScoped<ServicioNotificaciones>();
+builder.Services.AddScoped<ServicioReporteSolicitudes>();
+builder.Services.AddScoped<ServicioReporteTarjetas>();
 
 var app = builder.Build();
 
@@ -124,6 +130,22 @@ if (args.Length > 0 && args[0] == "enviar-correos")
 {
     using var alcance = app.Services.CreateScope();
     var procesador = alcance.ServiceProvider.GetRequiredService<ProcesadorColaCorreo>();
+
+    // RF-NOT-12: un solo envío a la vez, aunque se ejecute a mano mientras corre el proceso periódico.
+    // El archivo queda abierto en exclusiva hasta que este envío termina.
+    FileStream candado;
+    try
+    {
+        candado = new FileStream(rutaBaseDatos + ".envio.lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+    }
+    catch (IOException)
+    {
+        Console.WriteLine("Ya hay otro envío de correos en curso. Vuelve a ejecutarlo en unos segundos.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    using var candadoAbierto = candado;
 
     try
     {

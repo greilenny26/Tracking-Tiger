@@ -39,6 +39,14 @@ public static class CatalogoOperaciones
     public const string DescargarDocumento = "descargar-documento";
     public const string EliminarDocumento = "eliminar-documento";
 
+    public const string ConsultarNotificaciones = "consultar-notificaciones";
+    public const string MarcarNotificacionLeida = "marcar-notificacion-leida";
+    public const string ConsultarPreferenciasNotificacion = "consultar-preferencias-notificacion";
+    public const string CambiarPreferenciasNotificacion = "cambiar-preferencias-notificacion";
+    public const string ConsultarColaCorreos = "consultar-cola-correos";
+    public const string ReporteSolicitudesPermiso = "reporte-solicitudes-permiso";
+    public const string ReporteRiesgoComercios = "reporte-riesgo-comercios";
+
     // Gestión de permisos: operaciones que un usuario Estándar puede pedir con una solicitud. Nunca se
     // incluyen las que administran usuarios, roles o solicitudes: aprobar una de esas dejaría que alguien
     // se diera más privilegios a sí mismo (escalada de privilegios).
@@ -88,6 +96,16 @@ public static class CatalogoOperaciones
         [ConsultarDocumento]     = ExigenciaAcceso.Autenticada,
         [DescargarDocumento]     = ExigenciaAcceso.Autenticada,
         [EliminarDocumento]      = ExigenciaAcceso.Autenticada,
+        // RF-NOT-04, 05, 07: con sesión; que cada quien toque solo lo suyo lo decide ServicioNotificaciones.
+        [ConsultarNotificaciones] = ExigenciaAcceso.Autenticada,
+        [MarcarNotificacionLeida] = ExigenciaAcceso.Autenticada,
+        [ConsultarPreferenciasNotificacion] = ExigenciaAcceso.Autenticada,
+        [CambiarPreferenciasNotificacion] = ExigenciaAcceso.Autenticada,
+        // RF-NOT-11: la cola de correos es del Administrador.
+        [ConsultarColaCorreos]   = ExigenciaAcceso.DeRol(Rol.Administrador),
+        // RF-REP-04: el reporte del Core limita a un Estándar a sus datos; el de comercios es del Administrador.
+        [ReporteSolicitudesPermiso] = ExigenciaAcceso.Autenticada,
+        [ReporteRiesgoComercios] = ExigenciaAcceso.DeRol(Rol.Administrador),
     };
 }
 
