@@ -17,6 +17,52 @@ namespace Tracking_Tiger.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
+            modelBuilder.Entity("Tracking_Tiger.Core.Auditoria.RegistroAuditoria", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Accion")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Entidad")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EntidadId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ValorAnterior")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ValorNuevo")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Entidad");
+
+                    b.HasIndex("Fecha");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("RegistrosAuditoria", (string)null);
+                });
+
             modelBuilder.Entity("Tracking_Tiger.Core.ControlAcceso.CodigoRecuperacion", b =>
                 {
                     b.Property<int>("Id")
@@ -501,6 +547,15 @@ namespace Tracking_Tiger.Migrations
                     b.HasIndex("TarjetaId", "Fecha");
 
                     b.ToTable("Transacciones", (string)null);
+                });
+
+            modelBuilder.Entity("Tracking_Tiger.Core.Auditoria.RegistroAuditoria", b =>
+                {
+                    b.HasOne("Tracking_Tiger.Core.ControlAcceso.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Tracking_Tiger.Core.ControlAcceso.CodigoRecuperacion", b =>

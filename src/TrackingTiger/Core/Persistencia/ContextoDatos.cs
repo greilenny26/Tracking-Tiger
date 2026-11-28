@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Tracking_Tiger.Core.Auditoria;
 using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
 using Tracking_Tiger.Core.Documentos;
@@ -24,6 +25,26 @@ public class ContextoDatos : DbContext
     public DbSet<PermisoOtorgado> PermisosOtorgados => Set<PermisoOtorgado>();
     public DbSet<Documento> Documentos => Set<Documento>();
     public DbSet<Notificacion> Notificaciones => Set<Notificacion>();
+    public DbSet<RegistroAuditoria> RegistrosAuditoria => Set<RegistroAuditoria>();
+
+    // RF-AUD-06: la auditoría solo admite agregar. Cambiar o borrar un registro se rechaza antes de guardar.
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        RechazarCambiosEnAuditoria();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        RechazarCambiosEnAuditoria();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    private void RechazarCambiosEnAuditoria()
+    {
+        if (ChangeTracker.Entries<RegistroAuditoria>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("El registro de auditoría no se puede modificar ni eliminar.");
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -173,6 +194,24 @@ public class ContextoDatos : DbContext
             notificacion.HasIndex(n => n.DestinatarioId);
             // Restrict: borrar el usuario no debe borrar su historial en silencio.
             notificacion.HasOne<Usuario>().WithMany().HasForeignKey(n => n.DestinatarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RegistroAuditoria>(registro =>
+        {
+            registro.ToTable("RegistrosAuditoria");
+            registro.HasKey(r => r.Id);
+            registro.Property(r => r.Accion).IsRequired().HasMaxLength(RegistroAuditoria.LargoMaximoAccion);
+            registro.Property(r => r.Entidad).IsRequired().HasMaxLength(RegistroAuditoria.LargoMaximoEntidad);
+            registro.Property(r => r.EntidadId).IsRequired();
+            registro.Property(r => r.Fecha).IsRequired();
+            registro.Property(r => r.ValorAnterior).IsRequired().HasMaxLength(RegistroAuditoria.LargoMaximoValor);
+            registro.Property(r => r.ValorNuevo).IsRequired().HasMaxLength(RegistroAuditoria.LargoMaximoValor);
+            // RF-AUD-07: se filtra por usuario, por entidad y por fecha.
+            registro.HasIndex(r => r.UsuarioId);
+            registro.HasIndex(r => r.Entidad);
+            registro.HasIndex(r => r.Fecha);
+            // Restrict: borrar un usuario no debe borrar lo que hizo.
+            registro.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // RF-NOT-07: los usuarios que ya existían quedan con el correo activado.
