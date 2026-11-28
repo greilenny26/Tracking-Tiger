@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Tracking_Tiger.Core.Auditoria;
+using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.Persistencia;
 
 namespace Tracking_Tiger.Core.ControlAcceso;
@@ -8,10 +10,13 @@ namespace Tracking_Tiger.Core.ControlAcceso;
 public sealed class ServicioAdministracionUsuarios
 {
     private readonly ContextoDatos _contexto;
+    private readonly IReloj _reloj;
 
-    public ServicioAdministracionUsuarios(ContextoDatos contexto)
+    // Sin reloj explícito (pruebas) se usa el del sistema, en UTC (RD-11).
+    public ServicioAdministracionUsuarios(ContextoDatos contexto, IReloj? reloj = null)
     {
         _contexto = contexto;
+        _reloj = reloj ?? new RelojSistema();
     }
 
     // Listado ordenado por fecha de creación (el Id desempata). La consulta solo lee las cinco
@@ -53,7 +58,12 @@ public sealed class ServicioAdministracionUsuarios
         if (usuario is null)
             return ResultadoCambioRol.NoEncontrado();
 
+        var rolAnterior = usuario.Rol;
         usuario.CambiarRol(Enum.Parse<Rol>(nombre));
+
+        // RF-AUD-04: rol anterior y nuevo, en el mismo guardado que el cambio.
+        _contexto.RegistrosAuditoria.Add(RegistroAuditoria.Crear(idSolicitante, AccionesAuditadas.CambiarRol,
+            EntidadesAuditadas.Usuario, usuario.Id, rolAnterior.NombreVisible(), usuario.Rol.NombreVisible(), _reloj.AhoraUtc));
         await _contexto.SaveChangesAsync();
 
         return ResultadoCambioRol.Cambiado(new UsuarioListado(
