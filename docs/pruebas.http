@@ -1599,3 +1599,33 @@ GET http://localhost:5000/api/reportes/tarjetas/riesgo-por-comercio?desde=2026-1
 Authorization: Bearer <token-admin>
 
 #   Esperado: HTTP 200, una fila por comercio ordenada por montoDeclinado. Con <token-agente> → 403.
+
+### =============== Auditoría ===============
+#   Criterios: docs/criterios-auditoria.md. Antes, provocar alguna acción auditada (aprobar o rechazar una
+#   solicitud, subir o eliminar un documento, cambiar un rol, restablecer una contraseña).
+
+### RF-AUD-07 — Consultar todo
+GET http://localhost:5000/api/auditoria
+Authorization: Bearer <token-admin>
+
+#   Esperado: HTTP 200 [{"id","usuarioId","nombreUsuario","accion","entidad","entidadId","fecha","valorAnterior","valorNuevo"}],
+#   del más reciente al más antiguo. Ningún campo trae contraseñas ni códigos (RF-AUD-05).
+
+### RF-AUD-07 — Filtros combinados
+GET http://localhost:5000/api/auditoria?usuarioId=1&entidad=Documento&desde=2026-11-01&hasta=2026-11-30
+Authorization: Bearer <token-admin>
+
+#   Esperado: HTTP 200 solo con lo que hizo ese usuario sobre documentos en ese rango.
+#   entidad=Tarjeta, usuarioId=abc o desde posterior a hasta → 400. Rango sin datos → 200 [].
+
+### RF-AUD-07 — Un Estándar no puede consultar
+GET http://localhost:5000/api/auditoria
+Authorization: Bearer <token-agente>
+
+#   Esperado: HTTP 403. Sin token → 401.
+
+### RF-AUD-06 — No se puede borrar un registro
+DELETE http://localhost:5000/api/auditoria/1
+Authorization: Bearer <token-admin>
+
+#   Esperado: HTTP 404 (no existe esa operación). El registro sigue igual en GET /api/auditoria.

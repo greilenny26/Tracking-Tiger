@@ -55,7 +55,7 @@ No necesita variables de entorno ni la aplicación levantada. Las peticiones man
 - No cambiar las máquinas de estados (`MaquinaEstadosSolicitud`, `MaquinaEstadosTarjeta`) ni sus tablas
   sin que se pida expresamente.
 - No cambiar el comportamiento del Control de acceso, Gestión de permisos ni Documentos salvo para
-  conectar una notificación; sus pruebas existentes deben seguir pasando sin modificarse.
+  conectar una notificación o un registro de auditoría; sus pruebas existentes deben seguir pasando sin modificarse.
 - No agregar paquetes NuGet sin preguntar.
 - No avanzar a otra funcionalidad sin que se pida.
 

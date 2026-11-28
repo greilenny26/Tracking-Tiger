@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Tracking_Tiger.Core.Auditoria;
 using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
@@ -106,6 +107,10 @@ public sealed class ServicioSolicitudesPermiso
             $"Tu solicitud del permiso {solicitud.PermisoSolicitado} fue aprobada. " +
             $"Vigencia: {minutosVigencia.Value} minutos.");
 
+        // RF-AUD-02: quién aprobó qué y cuándo, en el mismo guardado.
+        _contexto.RegistrosAuditoria.Add(RegistroAuditoria.Crear(administradorId, AccionesAuditadas.AprobarSolicitud,
+            EntidadesAuditadas.SolicitudPermiso, solicitud.Id, nameof(EstadoSolicitud.Pendiente), solicitud.Estado.ToString(), ahora));
+
         await _contexto.SaveChangesAsync();
         return ResultadoResolucionSolicitud.Resuelta((await ListarAsync(s => s.Id == solicitudId)).Single());
     }
@@ -133,6 +138,11 @@ public sealed class ServicioSolicitudesPermiso
         await _notificaciones.AgregarAsync([solicitud.SolicitanteId], "solicitud-rechazada",
             "Tu solicitud de permiso fue rechazada",
             $"Tu solicitud del permiso {solicitud.PermisoSolicitado} fue rechazada. Motivo: {solicitud.MotivoRechazo}");
+
+        // RF-AUD-02: quién rechazó qué, cuándo y con qué motivo, en el mismo guardado.
+        _contexto.RegistrosAuditoria.Add(RegistroAuditoria.Crear(administradorId, AccionesAuditadas.RechazarSolicitud,
+            EntidadesAuditadas.SolicitudPermiso, solicitud.Id, nameof(EstadoSolicitud.Pendiente),
+            $"{solicitud.Estado}: {solicitud.MotivoRechazo}", solicitud.FechaResolucion ?? _reloj.AhoraUtc));
 
         await _contexto.SaveChangesAsync();
         return ResultadoResolucionSolicitud.Resuelta((await ListarAsync(s => s.Id == solicitudId)).Single());

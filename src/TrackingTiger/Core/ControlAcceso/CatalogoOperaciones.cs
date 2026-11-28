@@ -46,6 +46,7 @@ public static class CatalogoOperaciones
     public const string ConsultarColaCorreos = "consultar-cola-correos";
     public const string ReporteSolicitudesPermiso = "reporte-solicitudes-permiso";
     public const string ReporteRiesgoComercios = "reporte-riesgo-comercios";
+    public const string ConsultarAuditoria = "consultar-auditoria";
 
     // Gestión de permisos: operaciones que un usuario Estándar puede pedir con una solicitud. Nunca se
     // incluyen las que administran usuarios, roles o solicitudes: aprobar una de esas dejaría que alguien
@@ -106,6 +107,8 @@ public static class CatalogoOperaciones
         // RF-REP-04: el reporte del Core limita a un Estándar a sus datos; el de comercios es del Administrador.
         [ReporteSolicitudesPermiso] = ExigenciaAcceso.Autenticada,
         [ReporteRiesgoComercios] = ExigenciaAcceso.DeRol(Rol.Administrador),
+        // RF-AUD-07: la auditoría es del Administrador; un Estándar recibe rechazo aunque pida solo lo suyo.
+        [ConsultarAuditoria]     = ExigenciaAcceso.DeRol(Rol.Administrador),
     };
 }
 

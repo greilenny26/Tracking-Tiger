@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Tracking_Tiger.Core.Auditoria;
 using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.Correo;
 using Tracking_Tiger.Core.Persistencia;
@@ -73,7 +74,8 @@ public sealed class ServicioRecuperacionContrasena
     // deja de servir (se reemplaza por el hash de un secreto aleatorio que nadie conoce, nunca vacío),
     // se revocan TODAS las sesiones del usuario y se emite un código de recuperación con las mismas
     // reglas. El código en claro solo viaja en el correo, que se encola en la misma transacción.
-    public async Task<ResultadoForzarRestablecimiento> ForzarRestablecimientoAsync(int usuarioId)
+    // RF-AUD-05: administradorId sale de la sesión del servidor y queda como quien actuó.
+    public async Task<ResultadoForzarRestablecimiento> ForzarRestablecimientoAsync(int usuarioId, int administradorId)
     {
         await using var transaccion = await _contexto.Database.BeginTransactionAsync();
 
@@ -93,6 +95,11 @@ public sealed class ServicioRecuperacionContrasena
             // No debería ocurrir (el correo ya pasó la validación del registro). Sin guardar nada, la
             // transacción se descarta y el manejador global responde 500 sin detalles (RD-08).
             throw new InvalidOperationException($"No se pudo encolar el correo de restablecimiento: {encolado.Mensaje}");
+
+        // RF-AUD-05: lo inició un Administrador. Nunca se guarda la contraseña ni el código.
+        _contexto.RegistrosAuditoria.Add(RegistroAuditoria.Crear(administradorId, AccionesAuditadas.ForzarRestablecimiento,
+            EntidadesAuditadas.Usuario, usuario.Id, AccionesAuditadas.IniciadoPorAdministrador,
+            "Restablecimiento obligatorio", _reloj.AhoraUtc));
 
         await _contexto.SaveChangesAsync();
 
@@ -153,6 +160,10 @@ public sealed class ServicioRecuperacionContrasena
 
         registro.Usuario.CambiarContrasena(_hasher.Hashear(nuevaContrasena));
         registro.MarcarUsado();
+        // RF-AUD-05: lo inició el propio usuario con su código. Nunca se guarda la contraseña ni el código.
+        _contexto.RegistrosAuditoria.Add(RegistroAuditoria.Crear(registro.UsuarioId, AccionesAuditadas.RestablecerContrasena,
+            EntidadesAuditadas.Usuario, registro.UsuarioId, AccionesAuditadas.IniciadoPorUsuario,
+            "Contraseña reemplazada", _reloj.AhoraUtc));
         await _contexto.SaveChangesAsync();
 
         // RF-CA-12: toda credencial emitida antes del restablecimiento deja de servir.

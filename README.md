@@ -204,6 +204,37 @@ Devuelve una fila por comercio con `transacciones`, `declinadas`, `porcentajeDec
 
 **Comprobar el filtro:** pedir cada reporte con el día de hoy (`desde` = `hasta` = hoy) y con un rango anterior, por ejemplo `desde=2026-01-01&hasta=2026-01-31`: el primero trae los datos y el segundo devuelve `[]`.
 
+## Auditoría
+
+Criterios completos en `docs/criterios-auditoria.md`. Cada acción de la tabla deja un registro con usuario que actuó, acción, entidad, id, fecha (UTC), valor anterior y valor nuevo (RF-AUD-01). El registro se guarda en la misma operación: si la acción se rechaza, no queda registro.
+
+### Cómo provocar cada acción auditada
+
+| Acción | Cómo provocarla | Valor anterior → nuevo |
+|---|---|---|
+| `AprobarSolicitud` (RF-AUD-02) | `POST /api/permisos/solicitudes/{id}/aprobar` | `Pendiente` → `Aplicada` |
+| `RechazarSolicitud` (RF-AUD-02) | `POST /api/permisos/solicitudes/{id}/rechazar` con `{"motivo"}` | `Pendiente` → `Rechazada: <motivo>` |
+| `SubirDocumento` (RF-AUD-03, RF-DOC-06) | `POST /api/documentos` | `No existía` → `Activo: <nombre>` |
+| `EliminarDocumento` (RF-AUD-03, RF-DOC-06) | `DELETE /api/documentos/{id}` | `Activo` → `Eliminado` |
+| `CambiarRol` (RF-AUD-04) | `PUT /api/usuarios/{id}/rol` | rol anterior → rol nuevo |
+| `RestablecerContrasena` (RF-AUD-05) | `POST /api/auth/restablecer` con un código válido | `Iniciado por: Usuario` → `Contraseña reemplazada` |
+| `ForzarRestablecimiento` (RF-AUD-05) | `POST /api/usuarios/{id}/forzar-restablecimiento` | `Iniciado por: Administrador` → `Restablecimiento obligatorio` |
+| `CambiarContrasenaPropia` (RF-AUD-05) | `POST /api/auth/cambiar-contrasena` | `Iniciado por: Usuario` → `Contraseña reemplazada` |
+
+Nunca se guardan contraseñas, hashes ni códigos (RF-AUD-05).
+
+### Consultar (RF-AUD-07)
+
+```
+curl -H "Authorization: Bearer ADMIN" "http://localhost:5000/api/auditoria?usuarioId=1&entidad=Documento&desde=2026-11-01&hasta=2026-11-30"
+```
+
+Todos los filtros son opcionales y se combinan. `usuarioId` es quien actuó; `entidad` admite `SolicitudPermiso`, `Documento` o `Usuario`; las fechas siguen las mismas reglas que los reportes. El resultado va del más reciente al más antiguo. Un filtro no válido responde **400**; un Estándar recibe **403** y sin sesión **401**.
+
+### Solo inserción (RF-AUD-06)
+
+`/api/auditoria` solo tiene `GET`: no existe ninguna ruta para editar ni borrar (`DELETE /api/auditoria/1` responde 404). `RegistroAuditoria` no tiene métodos para cambiarse, y `ContextoDatos` rechaza al guardar cualquier registro modificado o borrado.
+
 ## API externa
 
 **Qué API:** [ExchangeRate-API](https://www.exchangerate-api.com), que da la tasa de cambio del día y exige una clave.
@@ -354,6 +385,7 @@ Quién puede ejecutar cada operación está declarado en un solo lugar: `src/Tra
 | `GET /api/correos?estado=` | Administrador | — |
 | `GET /api/reportes/solicitudes-permiso?desde=&hasta=` | Con sesión (un Estándar, solo las suyas) | — |
 | `GET /api/reportes/tarjetas/riesgo-por-comercio?desde=&hasta=` | Administrador | — |
+| `GET /api/auditoria?usuarioId=&entidad=&desde=&hasta=` | Administrador | — |
 
 `GET /api/usuarios` también lo puede ejecutar un usuario Estándar con un permiso `listar-usuarios` aprobado y vigente (RF-GP-05).
 
@@ -505,6 +537,8 @@ Las pruebas del módulo de negocio están en `tests/TrackingTiger.Pruebas/Tarjet
 - `MaquinaEstadosTarjetaPruebas.cs` ejercita `MaquinaEstadosTarjeta` directamente, sin base de datos: una prueba por cada fila de las tablas de `docs/maquina-de-estados.md`, el estado terminal y las condiciones.
 - `IntegracionTarjetasPermisosPruebas.cs` es la prueba de integración: usa `ServicioTarjetas` y `ServicioSolicitudesPermiso` **reales** (sin dobles) sobre una base SQLite en memoria. Verifica las dos caras: levantar un Bloqueo Total se rechaza mientras la solicitud no está aprobada (pendiente o rechazada) y se permite después de que un Administrador la aprueba.
 
+Las pruebas de Auditoría están en `tests/TrackingTiger.Pruebas/Auditoria/AuditoriaPruebas.cs`: cada una lleva en su comentario el criterio (A-01 a A-23) de `docs/criterios-auditoria.md` que verifica.
+
 Cada prueba crea sus propios datos, así que son independientes y pasan en cualquier orden; cada una marca sus fases `Preparar`, `Actuar` y `Verificar` y lleva un comentario con el requisito o la fila de la tabla que verifica.
 
 **Máquina de estados de la Tarjeta** (filas de `docs/maquina-de-estados.md`):
@@ -570,6 +604,7 @@ src/TrackingTiger/        La aplicación
     Correo/               Cola de correos, procesador, consulta y enviador SMTP
     Notificaciones/       Bandeja interna y canal de correo
     Reportes/             Reporte de solicitudes y rango de fechas
+    Auditoria/            Registro de auditoría (solo inserción) y su consulta
     Permisos/             Gestión de permisos
     Documentos/           Manejador de documentos
     Persistencia/         ContextoDatos (EF Core + SQLite)

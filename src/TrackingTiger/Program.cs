@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
+using Tracking_Tiger.Core.Auditoria;
 using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Correo;
@@ -67,6 +68,7 @@ builder.Services.AddScoped<ServicioConsultaCorreos>();
 builder.Services.AddScoped<ServicioNotificaciones>();
 builder.Services.AddScoped<ServicioReporteSolicitudes>();
 builder.Services.AddScoped<ServicioReporteTarjetas>();
+builder.Services.AddScoped<ServicioConsultaAuditoria>();
 
 var app = builder.Build();
 
