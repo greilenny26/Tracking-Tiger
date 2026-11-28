@@ -82,7 +82,11 @@ public sealed class ControladorUsuarios : ControllerBase
     [HttpPost("{id:int}/forzar-restablecimiento")]
     public async Task<IActionResult> ForzarRestablecimiento(int id)
     {
-        var resultado = await _servicioRecuperacion.ForzarRestablecimientoAsync(id);
+        // RF-AUD-05: el id del Administrador sale de la sesión (claim del servidor).
+        if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var idSolicitante))
+            return Unauthorized(new { mensaje = "Sesión no válida o vencida." });
+
+        var resultado = await _servicioRecuperacion.ForzarRestablecimientoAsync(id, idSolicitante);
 
         return resultado.Estado == EstadoForzarRestablecimiento.Forzado
             ? Ok(new { mensaje = resultado.Mensaje, usuario = resultado.Usuario })

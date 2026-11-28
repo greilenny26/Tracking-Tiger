@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Tracking_Tiger.Core.Auditoria;
 using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.Persistencia;
 
@@ -148,6 +149,9 @@ public sealed class ServicioSesion
         await using var transaccion = await _contexto.Database.BeginTransactionAsync();
 
         usuario.CambiarContrasena(_hasher.Hashear(nuevaContrasena));
+        // RF-AUD-05: lo inició el propio usuario. Nunca se guarda la contraseña.
+        _contexto.RegistrosAuditoria.Add(RegistroAuditoria.Crear(usuarioId, AccionesAuditadas.CambiarContrasenaPropia,
+            EntidadesAuditadas.Usuario, usuarioId, AccionesAuditadas.IniciadoPorUsuario, "Contraseña reemplazada", _reloj.AhoraUtc));
         await _contexto.SaveChangesAsync();
 
         await _contexto.SesionesUsuario
