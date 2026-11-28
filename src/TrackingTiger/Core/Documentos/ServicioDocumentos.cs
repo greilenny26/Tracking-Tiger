@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Tracking_Tiger.Core.Auditoria;
 using Tracking_Tiger.Core.Comun;
 using Tracking_Tiger.Core.ControlAcceso;
 using Tracking_Tiger.Core.Persistencia;
@@ -64,8 +65,16 @@ public sealed class ServicioDocumentos
         }
 
         var documento = Documento.Registrar(nombreLimpio, tipoLimpio, tamano, usuarioId, ruta, _reloj.AhoraUtc);
+
+        // RF-DOC-06, RF-AUD-03: el registro necesita el id del documento, que la base asigna al guardarlo.
+        // Una sola transacción: o quedan el documento y su auditoría, o ninguno.
+        await using var transaccion = await _contexto.Database.BeginTransactionAsync();
         _contexto.Documentos.Add(documento);
         await _contexto.SaveChangesAsync();
+        _contexto.RegistrosAuditoria.Add(RegistroAuditoria.Crear(usuarioId, AccionesAuditadas.SubirDocumento,
+            EntidadesAuditadas.Documento, documento.Id, "No existía", $"Activo: {documento.Nombre}", documento.FechaSubida));
+        await _contexto.SaveChangesAsync();
+        await transaccion.CommitAsync();
         return ResultadoOperacionDocumento.Exito("Documento subido.", Detalle(documento, usuario.Nombre));
     }
 
@@ -124,7 +133,11 @@ public sealed class ServicioDocumentos
         if (rechazo is not null)
             return rechazo;
 
-        documento!.MarcarEliminado(_reloj.AhoraUtc);
+        var ahora = _reloj.AhoraUtc;
+        documento!.MarcarEliminado(ahora);
+        // RF-DOC-06, RF-AUD-03: en el mismo guardado que la eliminación.
+        _contexto.RegistrosAuditoria.Add(RegistroAuditoria.Crear(usuarioId, AccionesAuditadas.EliminarDocumento,
+            EntidadesAuditadas.Documento, documento.Id, "Activo", "Eliminado", ahora));
         await _contexto.SaveChangesAsync();
 
         var nombres = await NombresDeAsync([documento.UsuarioId]);
